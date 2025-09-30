@@ -18,7 +18,7 @@ Usage
     actions:
       -l, --list            List files in archive ARCHIVE
       -x, --extract         Extract FILEs from ARCHIVE
-      -c, --create          Creative ARCHIVE from FILEs
+      -c, --create          Create ARCHIVE from FILEs
       -d, --delete          Delete FILEs from ARCHIVE
       -a, --append          Append FILEs to ARCHIVE
     

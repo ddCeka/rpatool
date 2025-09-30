@@ -323,8 +323,8 @@ if __name__ == "__main__":
 
     parser.add_argument('-l', '--list', action='store_true', help='List files in archive ARCHIVE.')
     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')
-    parser.add_argument('--only', metavar='EXT', help='Optional: extract only files with this extension (e.g., .png)')
-    parser.add_argument('-c', '--create', action='store_true', help='Creative ARCHIVE from FILEs.')
+    parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')
+    parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
     parser.add_argument('-d', '--delete', action='store_true', help='Delete FILEs from ARCHIVE.')
     parser.add_argument('-a', '--append', action='store_true', help='Append FILEs to ARCHIVE.')
 
@@ -337,7 +337,7 @@ if __name__ == "__main__":
 
     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
-    parser.add_argument('-V', '--version', action='version', version='rpatool v0.9', help='Show version information.')
+    parser.add_argument('-V', '--version', action='version', version='rpatool v0.9.1', help='Show version information.')
     arguments = parser.parse_args()
 
     # Determine RPA version.

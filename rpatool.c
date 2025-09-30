@@ -2588,7 +2588,6 @@ static const char __pyx_k_RenPyArchive[] = "RenPyArchive";
 static const char __pyx_k_add_argument[] = "add_argument";
 static const char __pyx_k_initializing[] = "_initializing";
 static const char __pyx_k_is_coroutine[] = "_is_coroutine";
-static const char __pyx_k_rpatool_v0_9[] = "rpatool v0.9";
 static const char __pyx_k_version_info[] = "version_info";
 static const char __pyx_k_A_4q_c_1_4waq[] = "\200A\330\010\013\2104\210q\220\006\220c\230\021\330\014\023\2201\340\014\023\2204\220w\230a\230q";
 static const char __pyx_k_A_81A_G1A_D_1[] = "\200A\330\010\023\2208\2301\230A\360\006\000\t\r\210G\2201\220A\330\010\014\210D\220\001\220\032\2301";
@@ -2596,6 +2595,7 @@ static const char __pyx_k_class_getitem[] = "__class_getitem__";
 static const char __pyx_k_verbose_print[] = "verbose_print";
 static const char __pyx_k_A_t1D_T_4q_F_q[] = "\200A\330\010\017\210t\2201\220D\230\010\240\005\240T\250\022\2504\250q\260\004\260F\270%\270q";
 static const char __pyx_k_ArgumentParser[] = "ArgumentParser";
+static const char __pyx_k_rpatool_v0_9_1[] = "rpatool v0.9.1";
 static const char __pyx_k_PICKLE_PROTOCOL[] = "PICKLE_PROTOCOL";
 static const char __pyx_k_extract_indexes[] = "extract_indexes";
 static const char __pyx_k_RenPyArchive_add[] = "RenPyArchive.add";
@@ -2624,10 +2624,10 @@ static const char __pyx_k_Print_this_help_and_exit[] = "Print this help and exit
 static const char __pyx_k_Rebuilding_archive_index[] = "Rebuilding archive index...";
 static const char __pyx_k_RenPyArchive_get_version[] = "RenPyArchive.get_version";
 static const char __pyx_k_Show_version_information[] = "Show version information.";
+static const char __pyx_k_Create_ARCHIVE_from_FILEs[] = "Create ARCHIVE from FILEs.";
 static const char __pyx_k_Delete_FILEs_from_ARCHIVE[] = "Delete FILEs from ARCHIVE.";
 static const char __pyx_k_Extract_FILEs_from_ARCHIVE[] = "Extract FILEs from ARCHIVE.";
 static const char __pyx_k_RenPyArchive_verbose_print[] = "RenPyArchive.verbose_print";
-static const char __pyx_k_Creative_ARCHIVE_from_FILEs[] = "Creative ARCHIVE from FILEs.";
 static const char __pyx_k_RenPyArchive_extract_indexes[] = "RenPyArchive.extract_indexes";
 static const char __pyx_k_Use_0_help_for_usage_details[] = "Use {0} --help for usage details.";
 static const char __pyx_k_Could_not_save_archive_file_0[] = "Could not save archive file: {0}";
@@ -2655,8 +2655,8 @@ static const char __pyx_k_Be_a_bit_more_verbose_while_perf[] = "Be a bit more ve
 static const char __pyx_k_Could_not_delete_file_0_from_arc[] = "Could not delete file {0} from archive: {1}";
 static const char __pyx_k_Could_not_extract_file_0_from_ar[] = "Could not extract file {0} from archive: {1}";
 static const char __pyx_k_Could_not_open_archive_file_0_fo[] = "Could not open archive file {0} for reading: {1}";
+static const char __pyx_k_Extract_only_FILEs_with_specific[] = "Extract only FILEs with specific extension (e.g., .png)";
 static const char __pyx_k_O1_81A_9Cq_t1_9Cq_AQ_4y_2T_Yc_AQ[] = "\200O\2201\330\010\023\2208\2301\230A\340\010\013\2109\220C\220q\330\014\027\220t\2301\330\010\013\2109\220C\220q\330\014\022\220*\230A\230Q\330\010\013\2104\210y\230\003\2302\230T\240\024\240Y\250c\260\021\330\014\022\220*\230A\230Q\340\010\014\210N\230!\2301\340\010\020\220\004\220A\340\010\014\210H\220D\230\001\230\024\230X\240U\250!\330\014\026\220d\230%\230q\240\001\340\014\020\220\004\220H\230A\230Q\330\014\021\220\021\220(\230!\360\006\000\t\022\220\021\330\010\013\2104\210y\230\003\2301\330\014\025\220Q\330\r\021\220\031\230#\230Q\330\014\025\220Q\330\010\022\220$\220a\220z\240\021\330\010\017\210u\220A\220Q\360\006\000\t\023\220!\330\010\014\210N\230!\2301\330\010\014\210F\220+\230U\240&\250\001\340\014\017\210t\220;\230b\240\001\330\020\032\230$\320\036/\250q\330\020\027\220v\230Q\230a\330\020\032\230#\230Q\230a\340\014\023\2206\230\021\230!\340\014\017\210t\2209\230C\230q\330\020\027\220q\230\010\240\003\2407\250\"\250D\260\006\260c\270\021\270)\3002\300T\310\021\330\021\025\220Y\230c\240\021\330\020\027\220q\230\010\240\003\2408\2503\250a\250q\330\014\026\220c\230\021\230!\360\006\000\t\r\210N\230!\2301\330\010\017\210v\220Q\220f\230G\2401\240F\250&\260\001\260\031\270$\320>Q\320QR\340\010\014\210N\230!\320\033R\320RY\320YZ\320Z^\320^_\330\010\017\210u\220A\220Q\330\010\013\2104\210y\230\003\2301\330\014\023\2206\230\021\230&\240\007\240q\320(<\270G\3001\300D\310\r\320U]\320]a\320ab\340\014\023\2206\230\021\230&\240\007\240q\250\r\260W\270A\270T\300\035\310a\340\010\017\210v\220Q\360\006\000\t\r\210E\220\021\220!";
-static const char __pyx_k_Optional_extract_only_files_with[] = "Optional: extract only files with this extension (e.g., .png)";
 static const char __pyx_k_Reading_file_0_from_internal_sto[] = "Reading file {0} from internal storage...";
 static const char __pyx_k_Removing_file_0_from_archive_ind[] = "Removing file {0} from archive indexes...";
 static const char __pyx_k_Removing_file_0_from_internal_st[] = "Removing file {0} from internal storage...";
@@ -2811,17 +2811,17 @@ static __pyx_mstatetype * const __pyx_mstate_global = &__pyx_mstate_global_stati
 #define __pyx_kp_u_Could_not_extract_file_0_from_ar __pyx_string_tab[15]
 #define __pyx_kp_u_Could_not_open_archive_file_0_fo __pyx_string_tab[16]
 #define __pyx_kp_u_Could_not_save_archive_file_0 __pyx_string_tab[17]
-#define __pyx_kp_u_Creative_ARCHIVE_from_FILEs __pyx_string_tab[18]
+#define __pyx_kp_u_Create_ARCHIVE_from_FILEs __pyx_string_tab[18]
 #define __pyx_kp_u_Delete_FILEs_from_ARCHIVE __pyx_string_tab[19]
 #define __pyx_n_u_ENOENT __pyx_string_tab[20]
 #define __pyx_n_u_EXT __pyx_string_tab[21]
 #define __pyx_kp_u_Extract_FILEs_from_ARCHIVE __pyx_string_tab[22]
-#define __pyx_n_u_FILE __pyx_string_tab[23]
-#define __pyx_n_u_IOError __pyx_string_tab[24]
-#define __pyx_n_u_KEY __pyx_string_tab[25]
-#define __pyx_kp_u_List_files_in_archive_ARCHIVE __pyx_string_tab[26]
-#define __pyx_kp_u_No_operation_given __pyx_string_tab[27]
-#define __pyx_kp_u_Optional_extract_only_files_with __pyx_string_tab[28]
+#define __pyx_kp_u_Extract_only_FILEs_with_specific __pyx_string_tab[23]
+#define __pyx_n_u_FILE __pyx_string_tab[24]
+#define __pyx_n_u_IOError __pyx_string_tab[25]
+#define __pyx_n_u_KEY __pyx_string_tab[26]
+#define __pyx_kp_u_List_files_in_archive_ARCHIVE __pyx_string_tab[27]
+#define __pyx_kp_u_No_operation_given __pyx_string_tab[28]
 #define __pyx_n_u_PICKLE_PROTOCOL __pyx_string_tab[29]
 #define __pyx_kp_u_Print_this_help_and_exit __pyx_string_tab[30]
 #define __pyx_n_u_RPA2_MAGIC __pyx_string_tab[31]
@@ -3004,7 +3004,7 @@ static __pyx_mstatetype * const __pyx_mstate_global = &__pyx_mstate_global_stati
 #define __pyx_n_u_replace __pyx_string_tab[208]
 #define __pyx_n_u_rpatool __pyx_string_tab[209]
 #define __pyx_kp_u_rpatool_py __pyx_string_tab[210]
-#define __pyx_kp_u_rpatool_v0_9 __pyx_string_tab[211]
+#define __pyx_kp_u_rpatool_v0_9_1 __pyx_string_tab[211]
 #define __pyx_kp_u_rpi __pyx_string_tab[212]
 #define __pyx_n_u_save __pyx_string_tab[213]
 #define __pyx_kp_u_saving_is_only_supported_for_ver __pyx_string_tab[214]
@@ -13238,7 +13238,7 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
  * 
  *     parser.add_argument('-l', '--list', action='store_true', help='List files in archive ARCHIVE.')             # <<<<<<<<<<<<<<
  *     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')
- *     parser.add_argument('--only', metavar='EXT', help='Optional: extract only files with this extension (e.g., .png)')
+ *     parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')
 */
     __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_parser); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 324, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
@@ -13259,8 +13259,8 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
  * 
  *     parser.add_argument('-l', '--list', action='store_true', help='List files in archive ARCHIVE.')
  *     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')             # <<<<<<<<<<<<<<
- *     parser.add_argument('--only', metavar='EXT', help='Optional: extract only files with this extension (e.g., .png)')
- *     parser.add_argument('-c', '--create', action='store_true', help='Creative ARCHIVE from FILEs.')
+ *     parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')
+ *     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
 */
     __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_parser); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 325, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
@@ -13280,8 +13280,8 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
     /* "rpatool.py":326
  *     parser.add_argument('-l', '--list', action='store_true', help='List files in archive ARCHIVE.')
  *     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')
- *     parser.add_argument('--only', metavar='EXT', help='Optional: extract only files with this extension (e.g., .png)')             # <<<<<<<<<<<<<<
- *     parser.add_argument('-c', '--create', action='store_true', help='Creative ARCHIVE from FILEs.')
+ *     parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')             # <<<<<<<<<<<<<<
+ *     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
  *     parser.add_argument('-d', '--delete', action='store_true', help='Delete FILEs from ARCHIVE.')
 */
     __pyx_t_2 = NULL;
@@ -13296,7 +13296,7 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
       __pyx_t_5 = __Pyx_MakeVectorcallBuilderKwds(2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 326, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_5);
       if (__Pyx_VectorcallBuilder_AddArg(__pyx_mstate_global->__pyx_n_u_metavar, __pyx_mstate_global->__pyx_n_u_EXT, __pyx_t_5, __pyx_callargs+2, 0) < 0) __PYX_ERR(0, 326, __pyx_L1_error)
-      if (__Pyx_VectorcallBuilder_AddArg(__pyx_mstate_global->__pyx_n_u_help, __pyx_mstate_global->__pyx_kp_u_Optional_extract_only_files_with, __pyx_t_5, __pyx_callargs+2, 1) < 0) __PYX_ERR(0, 326, __pyx_L1_error)
+      if (__Pyx_VectorcallBuilder_AddArg(__pyx_mstate_global->__pyx_n_u_help, __pyx_mstate_global->__pyx_kp_u_Extract_only_FILEs_with_specific, __pyx_t_5, __pyx_callargs+2, 1) < 0) __PYX_ERR(0, 326, __pyx_L1_error)
       __pyx_t_7 = __Pyx_Object_Vectorcall_CallFromBuilder(__pyx_t_6, __pyx_callargs+__pyx_t_13, (2-__pyx_t_13) | (__pyx_t_13*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET), __pyx_t_5);
       __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
@@ -13308,8 +13308,8 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
 
     /* "rpatool.py":327
  *     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')
- *     parser.add_argument('--only', metavar='EXT', help='Optional: extract only files with this extension (e.g., .png)')
- *     parser.add_argument('-c', '--create', action='store_true', help='Creative ARCHIVE from FILEs.')             # <<<<<<<<<<<<<<
+ *     parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')
+ *     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')             # <<<<<<<<<<<<<<
  *     parser.add_argument('-d', '--delete', action='store_true', help='Delete FILEs from ARCHIVE.')
  *     parser.add_argument('-a', '--append', action='store_true', help='Append FILEs to ARCHIVE.')
 */
@@ -13321,7 +13321,7 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
     __pyx_t_7 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 327, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     if (PyDict_SetItem(__pyx_t_7, __pyx_mstate_global->__pyx_n_u_action, __pyx_mstate_global->__pyx_n_u_store_true) < 0) __PYX_ERR(0, 327, __pyx_L1_error)
-    if (PyDict_SetItem(__pyx_t_7, __pyx_mstate_global->__pyx_n_u_help, __pyx_mstate_global->__pyx_kp_u_Creative_ARCHIVE_from_FILEs) < 0) __PYX_ERR(0, 327, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_7, __pyx_mstate_global->__pyx_n_u_help, __pyx_mstate_global->__pyx_kp_u_Create_ARCHIVE_from_FILEs) < 0) __PYX_ERR(0, 327, __pyx_L1_error)
     __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_mstate_global->__pyx_tuple[9], __pyx_t_7); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 327, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
@@ -13329,8 +13329,8 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
     /* "rpatool.py":328
- *     parser.add_argument('--only', metavar='EXT', help='Optional: extract only files with this extension (e.g., .png)')
- *     parser.add_argument('-c', '--create', action='store_true', help='Creative ARCHIVE from FILEs.')
+ *     parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')
+ *     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
  *     parser.add_argument('-d', '--delete', action='store_true', help='Delete FILEs from ARCHIVE.')             # <<<<<<<<<<<<<<
  *     parser.add_argument('-a', '--append', action='store_true', help='Append FILEs to ARCHIVE.')
  * 
@@ -13351,7 +13351,7 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
     /* "rpatool.py":329
- *     parser.add_argument('-c', '--create', action='store_true', help='Creative ARCHIVE from FILEs.')
+ *     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
  *     parser.add_argument('-d', '--delete', action='store_true', help='Delete FILEs from ARCHIVE.')
  *     parser.add_argument('-a', '--append', action='store_true', help='Append FILEs to ARCHIVE.')             # <<<<<<<<<<<<<<
  * 
@@ -13486,7 +13486,7 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
  * 
  *     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')             # <<<<<<<<<<<<<<
  *     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
- *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9', help='Show version information.')
+ *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9.1', help='Show version information.')
 */
     __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_mstate_global->__pyx_n_u_parser); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 338, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
@@ -13507,7 +13507,7 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
  * 
  *     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')
  *     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')             # <<<<<<<<<<<<<<
- *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9', help='Show version information.')
+ *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9.1', help='Show version information.')
  *     arguments = parser.parse_args()
 */
     __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_mstate_global->__pyx_n_u_parser); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 339, __pyx_L1_error)
@@ -13528,7 +13528,7 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
     /* "rpatool.py":340
  *     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')
  *     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
- *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9', help='Show version information.')             # <<<<<<<<<<<<<<
+ *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9.1', help='Show version information.')             # <<<<<<<<<<<<<<
  *     arguments = parser.parse_args()
  * 
 */
@@ -13540,7 +13540,7 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
     __pyx_t_5 = __Pyx_PyDict_NewPresized(3); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 340, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     if (PyDict_SetItem(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_action, __pyx_mstate_global->__pyx_n_u_version) < 0) __PYX_ERR(0, 340, __pyx_L1_error)
-    if (PyDict_SetItem(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_version, __pyx_mstate_global->__pyx_kp_u_rpatool_v0_9) < 0) __PYX_ERR(0, 340, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_version, __pyx_mstate_global->__pyx_kp_u_rpatool_v0_9_1) < 0) __PYX_ERR(0, 340, __pyx_L1_error)
     if (PyDict_SetItem(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_help, __pyx_mstate_global->__pyx_kp_u_Show_version_information) < 0) __PYX_ERR(0, 340, __pyx_L1_error)
     __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_mstate_global->__pyx_tuple[19], __pyx_t_5); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 340, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
@@ -13550,7 +13550,7 @@ __Pyx_RefNannySetupContext("PyInit_rpatool", 0);
 
     /* "rpatool.py":341
  *     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
- *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9', help='Show version information.')
+ *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9.1', help='Show version information.')
  *     arguments = parser.parse_args()             # <<<<<<<<<<<<<<
  * 
  *     # Determine RPA version.
@@ -16762,17 +16762,17 @@ static const __Pyx_StringTabEntry __pyx_string_tab[] = {
   {__pyx_k_Could_not_extract_file_0_from_ar, sizeof(__pyx_k_Could_not_extract_file_0_from_ar), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_Could_not_extract_file_0_from_ar */
   {__pyx_k_Could_not_open_archive_file_0_fo, sizeof(__pyx_k_Could_not_open_archive_file_0_fo), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_Could_not_open_archive_file_0_fo */
   {__pyx_k_Could_not_save_archive_file_0, sizeof(__pyx_k_Could_not_save_archive_file_0), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_Could_not_save_archive_file_0 */
-  {__pyx_k_Creative_ARCHIVE_from_FILEs, sizeof(__pyx_k_Creative_ARCHIVE_from_FILEs), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_Creative_ARCHIVE_from_FILEs */
+  {__pyx_k_Create_ARCHIVE_from_FILEs, sizeof(__pyx_k_Create_ARCHIVE_from_FILEs), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_Create_ARCHIVE_from_FILEs */
   {__pyx_k_Delete_FILEs_from_ARCHIVE, sizeof(__pyx_k_Delete_FILEs_from_ARCHIVE), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_Delete_FILEs_from_ARCHIVE */
   {__pyx_k_ENOENT, sizeof(__pyx_k_ENOENT), 0, 1, 1}, /* PyObject cname: __pyx_n_u_ENOENT */
   {__pyx_k_EXT, sizeof(__pyx_k_EXT), 0, 1, 1}, /* PyObject cname: __pyx_n_u_EXT */
   {__pyx_k_Extract_FILEs_from_ARCHIVE, sizeof(__pyx_k_Extract_FILEs_from_ARCHIVE), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_Extract_FILEs_from_ARCHIVE */
+  {__pyx_k_Extract_only_FILEs_with_specific, sizeof(__pyx_k_Extract_only_FILEs_with_specific), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_Extract_only_FILEs_with_specific */
   {__pyx_k_FILE, sizeof(__pyx_k_FILE), 0, 1, 1}, /* PyObject cname: __pyx_n_u_FILE */
   {__pyx_k_IOError, sizeof(__pyx_k_IOError), 0, 1, 1}, /* PyObject cname: __pyx_n_u_IOError */
   {__pyx_k_KEY, sizeof(__pyx_k_KEY), 0, 1, 1}, /* PyObject cname: __pyx_n_u_KEY */
   {__pyx_k_List_files_in_archive_ARCHIVE, sizeof(__pyx_k_List_files_in_archive_ARCHIVE), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_List_files_in_archive_ARCHIVE */
   {__pyx_k_No_operation_given, sizeof(__pyx_k_No_operation_given), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_No_operation_given */
-  {__pyx_k_Optional_extract_only_files_with, sizeof(__pyx_k_Optional_extract_only_files_with), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_Optional_extract_only_files_with */
   {__pyx_k_PICKLE_PROTOCOL, sizeof(__pyx_k_PICKLE_PROTOCOL), 0, 1, 1}, /* PyObject cname: __pyx_n_u_PICKLE_PROTOCOL */
   {__pyx_k_Print_this_help_and_exit, sizeof(__pyx_k_Print_this_help_and_exit), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_Print_this_help_and_exit */
   {__pyx_k_RPA2_MAGIC, sizeof(__pyx_k_RPA2_MAGIC), 0, 1, 1}, /* PyObject cname: __pyx_n_u_RPA2_MAGIC */
@@ -16955,7 +16955,7 @@ static const __Pyx_StringTabEntry __pyx_string_tab[] = {
   {__pyx_k_replace, sizeof(__pyx_k_replace), 0, 1, 1}, /* PyObject cname: __pyx_n_u_replace */
   {__pyx_k_rpatool, sizeof(__pyx_k_rpatool), 0, 1, 1}, /* PyObject cname: __pyx_n_u_rpatool */
   {__pyx_k_rpatool_py, sizeof(__pyx_k_rpatool_py), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_rpatool_py */
-  {__pyx_k_rpatool_v0_9, sizeof(__pyx_k_rpatool_v0_9), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_rpatool_v0_9 */
+  {__pyx_k_rpatool_v0_9_1, sizeof(__pyx_k_rpatool_v0_9_1), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_rpatool_v0_9_1 */
   {__pyx_k_rpi, sizeof(__pyx_k_rpi), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_rpi */
   {__pyx_k_save, sizeof(__pyx_k_save), 0, 1, 1}, /* PyObject cname: __pyx_n_u_save */
   {__pyx_k_saving_is_only_supported_for_ver, sizeof(__pyx_k_saving_is_only_supported_for_ver), 0, 1, 0}, /* PyObject cname: __pyx_kp_u_saving_is_only_supported_for_ver */
@@ -17125,7 +17125,7 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
  * 
  *     parser.add_argument('-l', '--list', action='store_true', help='List files in archive ARCHIVE.')             # <<<<<<<<<<<<<<
  *     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')
- *     parser.add_argument('--only', metavar='EXT', help='Optional: extract only files with this extension (e.g., .png)')
+ *     parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')
 */
   __pyx_mstate_global->__pyx_tuple[7] = PyTuple_Pack(2, __pyx_mstate_global->__pyx_kp_u_l, __pyx_mstate_global->__pyx_kp_u_list_2); if (unlikely(!__pyx_mstate_global->__pyx_tuple[7])) __PYX_ERR(0, 324, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[7]);
@@ -17135,8 +17135,8 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
  * 
  *     parser.add_argument('-l', '--list', action='store_true', help='List files in archive ARCHIVE.')
  *     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')             # <<<<<<<<<<<<<<
- *     parser.add_argument('--only', metavar='EXT', help='Optional: extract only files with this extension (e.g., .png)')
- *     parser.add_argument('-c', '--create', action='store_true', help='Creative ARCHIVE from FILEs.')
+ *     parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')
+ *     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
 */
   __pyx_mstate_global->__pyx_tuple[8] = PyTuple_Pack(2, __pyx_mstate_global->__pyx_kp_u_x, __pyx_mstate_global->__pyx_kp_u_extract); if (unlikely(!__pyx_mstate_global->__pyx_tuple[8])) __PYX_ERR(0, 325, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[8]);
@@ -17144,8 +17144,8 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
 
   /* "rpatool.py":327
  *     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')
- *     parser.add_argument('--only', metavar='EXT', help='Optional: extract only files with this extension (e.g., .png)')
- *     parser.add_argument('-c', '--create', action='store_true', help='Creative ARCHIVE from FILEs.')             # <<<<<<<<<<<<<<
+ *     parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')
+ *     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')             # <<<<<<<<<<<<<<
  *     parser.add_argument('-d', '--delete', action='store_true', help='Delete FILEs from ARCHIVE.')
  *     parser.add_argument('-a', '--append', action='store_true', help='Append FILEs to ARCHIVE.')
 */
@@ -17154,8 +17154,8 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_tuple[9]);
 
   /* "rpatool.py":328
- *     parser.add_argument('--only', metavar='EXT', help='Optional: extract only files with this extension (e.g., .png)')
- *     parser.add_argument('-c', '--create', action='store_true', help='Creative ARCHIVE from FILEs.')
+ *     parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')
+ *     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
  *     parser.add_argument('-d', '--delete', action='store_true', help='Delete FILEs from ARCHIVE.')             # <<<<<<<<<<<<<<
  *     parser.add_argument('-a', '--append', action='store_true', help='Append FILEs to ARCHIVE.')
  * 
@@ -17165,7 +17165,7 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_tuple[10]);
 
   /* "rpatool.py":329
- *     parser.add_argument('-c', '--create', action='store_true', help='Creative ARCHIVE from FILEs.')
+ *     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
  *     parser.add_argument('-d', '--delete', action='store_true', help='Delete FILEs from ARCHIVE.')
  *     parser.add_argument('-a', '--append', action='store_true', help='Append FILEs to ARCHIVE.')             # <<<<<<<<<<<<<<
  * 
@@ -17235,7 +17235,7 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
  * 
  *     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')             # <<<<<<<<<<<<<<
  *     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
- *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9', help='Show version information.')
+ *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9.1', help='Show version information.')
 */
   __pyx_mstate_global->__pyx_tuple[17] = PyTuple_Pack(2, __pyx_mstate_global->__pyx_kp_u_h, __pyx_mstate_global->__pyx_kp_u_help_2); if (unlikely(!__pyx_mstate_global->__pyx_tuple[17])) __PYX_ERR(0, 338, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[17]);
@@ -17245,7 +17245,7 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
  * 
  *     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')
  *     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')             # <<<<<<<<<<<<<<
- *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9', help='Show version information.')
+ *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9.1', help='Show version information.')
  *     arguments = parser.parse_args()
 */
   __pyx_mstate_global->__pyx_tuple[18] = PyTuple_Pack(2, __pyx_mstate_global->__pyx_kp_u_v, __pyx_mstate_global->__pyx_kp_u_verbose_2); if (unlikely(!__pyx_mstate_global->__pyx_tuple[18])) __PYX_ERR(0, 339, __pyx_L1_error)
@@ -17255,7 +17255,7 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
   /* "rpatool.py":340
  *     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')
  *     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
- *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9', help='Show version information.')             # <<<<<<<<<<<<<<
+ *     parser.add_argument('-V', '--version', action='version', version='rpatool v0.9.1', help='Show version information.')             # <<<<<<<<<<<<<<
  *     arguments = parser.parse_args()
  * 
 */
