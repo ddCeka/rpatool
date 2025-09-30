@@ -1,0 +1,8 @@
+Package: rpatool
+Source: https://github.com/shizmob/rpatool
+Version: 0.9
+Architecture: aarch64
+Installed-Size: 300
+Maintainer: Reva <reva.floyd@disroot.org>
+Homepage: https://github.com/shizmob/rpatool
+Description: This is a simple tool allowing you to create, modify and extract Ren'Py Archive (.rpa/.rpi) files.
