@@ -310,7 +310,7 @@ class RenPyArchive:
         # Reload the file in our inner database.
         self.load(filename)
 
-if __name__ == "__main__":
+def main(argv = None):
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -337,7 +337,7 @@ if __name__ == "__main__":
 
     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
-    parser.add_argument('-V', '--version', action='version', version='rpatool v0.9.2', help='Show version information.')
+    parser.add_argument('-V', '--version', action='version', version='rpatool v1.0.0', help='Show version information.')
     arguments = parser.parse_args()
 
     # Determine RPA version.
@@ -464,11 +464,14 @@ if __name__ == "__main__":
                 print('Could not extract file {0} from archive: {1}'.format(filename, e), file=sys.stderr)
     elif arguments.list:
         # Print the sorted file list.
-        list = archive.list()
-        list.sort()
-        for file in list:
+        files = archive.list()
+        files.sort()
+        for file in files:
             print(file)
     else:
         print('No operation given :(')
         print('Use {0} --help for usage details.'.format(sys.argv[0]))
 
+
+if __name__ == '__main__':
+    main()
