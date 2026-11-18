@@ -596,7 +596,7 @@ def main(argv=None):
 
     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
-    parser.add_argument('-V', '--version', action='version', version='rpatool v1.3.0', help='Show version information.')
+    parser.add_argument('-V', '--version', action='version', version='rpatool v1.3.1', help='Show version information.')
     arguments = parser.parse_args(argv)
 
     explicit_version = None
