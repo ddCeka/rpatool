@@ -7,6 +7,7 @@ import os
 import codecs
 import errno
 import random
+import fnmatch
 
 if sys.version_info < (3, 8):
     try:
@@ -54,17 +55,14 @@ elif sys.version_info[0] == 2:
         return pickle.loads(data)
 
 
-def sanitize_extract_path(base_dir, archive_path):
-    """
-    Sanitize an archive-internal path so it cannot escape base_dir
-    via leading slashes, drive letters, or '..' traversal components.
-    """
-    clean = archive_path.replace('\\', '/')
-    _, clean = os.path.splitdrive(clean)
-    clean = clean.lstrip('/')
+def sanitize_extract_path(base_dir, target_path):
+    """Sanitize archive member paths so extraction cannot escape base_dir."""
+    normalized = target_path.replace('\\', '/')
+    _, normalized = os.path.splitdrive(normalized)
+    normalized = normalized.lstrip('/')
 
     safe_parts = []
-    for part in clean.split('/'):
+    for part in normalized.split('/'):
         if part in ('', '.'):
             continue
         if part == '..':
@@ -74,16 +72,51 @@ def sanitize_extract_path(base_dir, archive_path):
         safe_parts.append(part)
 
     if not safe_parts:
-        raise ValueError('unsafe or empty archive path: {0}'.format(archive_path))
+        raise ValueError('invalid or empty archive path: {0}'.format(_printable(target_path)))
 
-    rel_path = os.path.join(*safe_parts)
-    abs_base = os.path.abspath(base_dir)
-    abs_target = os.path.abspath(os.path.join(abs_base, rel_path))
+    base_abs = os.path.abspath(base_dir if base_dir else '.')
+    dest_abs = os.path.abspath(os.path.join(base_abs, *safe_parts))
 
-    if os.path.commonpath([abs_base, abs_target]) != abs_base:
-        raise ValueError('path traversal blocked for archive entry: {0}'.format(archive_path))
+    try:
+        common = os.path.commonpath([base_abs, dest_abs])
+    except ValueError:
+        raise ValueError('unsafe extraction path outside target directory: {0}'.format(_printable(target_path)))
 
-    return rel_path
+    if common != base_abs:
+        raise ValueError('unsafe extraction path outside target directory: {0}'.format(_printable(target_path)))
+
+    return os.path.join(base_dir if base_dir else '.', *safe_parts)
+
+
+def filter_files_by_only(files, only_spec):
+    """Filter archive file paths by comma-separated extensions and/or glob wildcards."""
+    if not only_spec:
+        return files
+
+    patterns = [p.strip().lower() for p in only_spec.split(',') if p.strip()]
+    if not patterns:
+        return files
+
+    def matches(filepath):
+        norm = filepath.replace('\\', '/').lower()
+        basename = os.path.basename(norm)
+        for pat in patterns:
+            # Wildcard pattern (*, ?, [...])
+            if any(ch in pat for ch in ('*', '?', '[')):
+                if '/' in pat:
+                    if fnmatch.fnmatchcase(norm, pat):
+                        return True
+                else:
+                    if fnmatch.fnmatchcase(basename, pat) or fnmatch.fnmatchcase(norm, pat):
+                        return True
+            else:
+                # Extension or suffix match (supports both ".png" and "png")
+                ext = pat if pat.startswith('.') else '.' + pat
+                if norm.endswith(ext) or norm == pat:
+                    return True
+        return False
+
+    return [f for f in files if matches(f)]
 
 
 class RenPyArchive:
@@ -92,23 +125,31 @@ class RenPyArchive:
     RPA3_2_MAGIC = 'RPA-3.2 '
     RPA4_MAGIC = 'RPA-4.0 '
 
-    # Built-in known modded magic headers and their default layout versions.
-    # Entries with None infer version from header token count (2 -> v3, 3+ -> v3.2, 1 -> v2).
-    KNOWN_MODDED_MAGICS = {
-        'ALT-1.0 ': 3,
-        'ZiX-12A ': 3,
-        'ZiX-12B ': 3,
-        'EX2-1.0 ': 3,
-        'RPA-2.1 ': 2,
-        'RPA-3.1 ': 3,
-        'RPA-4.1 ': 4,
-        'RPA-5.0 ': 3,
-    }
+    KNOWN_MODDED_MAGICS = (
+        'ALT-1.0 ',
+        'ZiX-12A ',
+        'ZiX-12B ',
+        'EX2-1.0 ',
+        'RPA-2.1 ',
+        'RPA-3.1 ',
+        'RPA-4.1 ',
+        'RPA-5.0 ',
+    )
 
     PICKLE_PROTOCOL = 2
 
-    def __init__(self, file=None, version=3, padlength=0, key=0xDEADBEEF, verbose=False,
-                 force_version=None, override_offset=None, override_key=None, custom_magic=None):
+    def __init__(
+        self,
+        file=None,
+        version=3,
+        padlength=0,
+        key=0xDEADBEEF,
+        verbose=False,
+        force_version=None,
+        override_offset=None,
+        override_key=None,
+        custom_magic=None,
+    ):
         self.file = None
         self.data_file = None
         self.handle = None
@@ -127,50 +168,42 @@ class RenPyArchive:
         if file is not None:
             self.load(file)
 
+    def __del__(self):
+        if self.handle is not None:
+            try:
+                self.handle.close()
+            except Exception:
+                pass
+
     @staticmethod
     def _normalize_magic(magic):
         if magic is None:
             return None
         magic = _unicode(magic)
-        if not magic.endswith(' '):
-            magic += ' '
-        return magic
+        if not magic:
+            return None
+        return magic if magic.endswith(' ') else magic + ' '
 
-    def __del__(self):
-        if self.handle is not None:
-            self.handle.close()
+    def _infer_version_from_header_tokens(self, header_line, magic_prefix=None):
+        """Infer archive layout version (2, 3, or 3.2) from header hex tokens."""
+        if magic_prefix and header_line.startswith(magic_prefix):
+            rest = header_line[len(magic_prefix):].strip().split()
+        else:
+            parts = header_line.strip().split()
+            rest = parts[1:] if len(parts) > 1 else []
 
-    def _infer_version_from_header(self, magic_line, magic_prefix):
-        rest = magic_line[len(magic_prefix):].strip()
-        vals = rest.split()
-        if len(vals) >= 3:
-            return 3.2
-        elif len(vals) == 2:
-            return 3
-        elif len(vals) == 1:
+        if len(rest) == 1:
             return 2
-        raise ValueError('could not infer archive layout from header: {0}'.format(magic_line.strip()))
+        elif len(rest) >= 3:
+            return 3.2
+        return 3
 
     def get_version(self):
-        self.handle.seek(0)
-        raw_line = self.handle.readline()
-        magic = raw_line.decode('utf-8', errors='replace')
-
         if self.force_version is not None:
-            if self.custom_magic is not None and magic.startswith(self.custom_magic):
-                self.detected_magic = self.custom_magic
-            else:
-                for known_magic in self.KNOWN_MODDED_MAGICS:
-                    if magic.startswith(known_magic):
-                        self.detected_magic = known_magic
-                        break
             return self.force_version
 
-        if self.custom_magic is not None:
-            if magic.startswith(self.custom_magic):
-                self.detected_magic = self.custom_magic
-                return self._infer_version_from_header(magic, self.custom_magic)
-            raise ValueError('archive header does not start with expected custom magic {0!r}'.format(self.custom_magic))
+        self.handle.seek(0)
+        magic = self.handle.readline().decode('utf-8', errors='replace')
 
         if magic.startswith(self.RPA4_MAGIC):
             self.detected_magic = self.RPA4_MAGIC
@@ -185,26 +218,32 @@ class RenPyArchive:
             self.detected_magic = self.RPA2_MAGIC
             return 2
 
-        for known_magic, default_ver in self.KNOWN_MODDED_MAGICS.items():
+        if self.custom_magic and magic.startswith(self.custom_magic):
+            self.detected_magic = self.custom_magic
+            return self._infer_version_from_header_tokens(magic, self.custom_magic)
+
+        for known_magic in self.KNOWN_MODDED_MAGICS:
             if magic.startswith(known_magic):
                 self.detected_magic = known_magic
-                self.verbose_print('Detected known modded magic header: {0!r}'.format(known_magic))
-                if default_ver is not None:
-                    return default_ver
-                return self._infer_version_from_header(magic, known_magic)
+                return self._infer_version_from_header_tokens(magic, known_magic)
 
-        if self.file and (self.file.lower().endswith('.rpi') or os.path.exists(os.path.splitext(self.file)[0] + '.rpi')):
-            self.detected_magic = None
+        if self.file and self.file.lower().endswith('.rpi'):
             return 1
+
+        if self.file and self.file.lower().endswith('.rpa'):
+            base, _ = os.path.splitext(self.file)
+            if os.path.exists(base + '.rpi'):
+                return 1
 
         raise ValueError('the given file is not a valid Ren\'Py archive, or an unsupported version')
 
-    def _parse_header_tokens(self, metadata):
-        if self.detected_magic is not None and metadata.startswith(self.detected_magic):
-            rest = metadata[len(self.detected_magic):].strip()
-            return rest.split()
-        vals = metadata.strip().split()
-        return vals[1:] if len(vals) > 1 else []
+    def _resolve_v1_paths(self, filename):
+        base, ext = os.path.splitext(filename)
+        if ext.lower() == '.rpi':
+            return filename, base + '.rpa'
+        elif ext.lower() == '.rpa':
+            return base + '.rpi', filename
+        return filename + '.rpi', filename + '.rpa'
 
     def extract_indexes(self):
         self.handle.seek(0)
@@ -212,25 +251,30 @@ class RenPyArchive:
 
         if self.version in (2, 3, 3.2, 4):
             metadata = self.handle.readline().decode('utf-8', errors='replace')
-            vals = self._parse_header_tokens(metadata)
-
-            if self.override_offset is not None:
-                offset = self.override_offset
+            active_magic = self.custom_magic or self.detected_magic
+            if active_magic and metadata.startswith(active_magic):
+                vals = metadata[len(active_magic):].strip().split()
+                offset = self.override_offset if self.override_offset is not None else int(vals[0], 16)
+                subkeys = vals[1:]
             else:
-                if len(vals) < 1:
-                    raise ValueError('missing index offset in archive header')
-                offset = int(vals[0], 16)
+                vals = metadata.split()
+                offset = self.override_offset if self.override_offset is not None else int(vals[1], 16)
+                subkeys = vals[2:]
 
-            if self.version in (3, 3.2, 4):
+            if self.version in (3, 4):
                 if self.override_key is not None:
                     self.key = self.override_key
-                elif self.version in (3, 4):
+                else:
                     self.key = 0
-                    for subkey in vals[1:]:
+                    for subkey in subkeys:
                         self.key ^= int(subkey, 16)
-                elif self.version == 3.2:
+            elif self.version == 3.2:
+                if self.override_key is not None:
+                    self.key = self.override_key
+                else:
                     self.key = 0
-                    for subkey in vals[2:]:
+                    start_idx = 1 if len(subkeys) > 1 else 0
+                    for subkey in subkeys[start_idx:]:
                         self.key ^= int(subkey, 16)
 
             self.handle.seek(offset)
@@ -251,9 +295,14 @@ class RenPyArchive:
                             entries.append((ent_offset ^ self.key, ent_length ^ self.key, prefix))
                     indexes[i] = entries
         elif self.version == 1:
-            rpi_path = self.file if self.file.lower().endswith('.rpi') else os.path.splitext(self.file)[0] + '.rpi'
+            rpi_path, rpa_path = self._resolve_v1_paths(self.file)
+            self.handle.close()
             with open(rpi_path, 'rb') as rpi_handle:
                 indexes = _unpickle(codecs.decode(rpi_handle.read(), 'zlib'))
+            if not os.path.exists(rpa_path):
+                raise IOError(errno.ENOENT, 'companion RPAv1 data file {0} not found'.format(_printable(rpa_path)))
+            self.data_file = rpa_path
+            self.handle = open(self.data_file, 'rb')
         else:
             raise ValueError('unsupported archive version: {0}'.format(self.version))
 
@@ -339,41 +388,27 @@ class RenPyArchive:
         if self.handle is not None:
             self.handle.close()
             self.handle = None
-
         self.file = filename
+        self.data_file = filename
         self.files = {}
-        self.detected_magic = None
         self.handle = open(self.file, 'rb')
         self.version = self.get_version()
         self.indexes = self.extract_indexes()
 
-        if self.version == 1:
-            base, _ = os.path.splitext(self.file)
-            rpa_path = base + '.rpa'
-            if not os.path.exists(rpa_path):
-                self.handle.close()
-                self.handle = None
-                raise IOError(errno.ENOENT, 'companion RPAv1 data file {0} not found'.format(rpa_path))
-            self.handle.close()
-            self.data_file = rpa_path
-            self.handle = open(self.data_file, 'rb')
-        else:
-            self.data_file = self.file
-
     def _get_write_magic(self):
-        if self.custom_magic is not None:
+        if self.custom_magic:
             return self.custom_magic
-        if self.detected_magic is not None:
+        if self.detected_magic:
             return self.detected_magic
         if self.version == 4:
             return self.RPA4_MAGIC
-        elif self.version == 3.2:
+        if self.version == 3.2:
             return self.RPA3_2_MAGIC
-        elif self.version == 3:
+        if self.version == 3:
             return self.RPA3_MAGIC
-        elif self.version == 2:
+        if self.version == 2:
             return self.RPA2_MAGIC
-        return None
+        return ''
 
     def save(self, filename=None):
         if filename is None:
@@ -397,13 +432,10 @@ class RenPyArchive:
             self.handle = None
 
         if self.version == 1:
-            base, _ = os.path.splitext(filename)
-            rpi_path = base + '.rpi'
-            rpa_path = base + '.rpa'
-
+            rpi_path, rpa_path = self._resolve_v1_paths(filename)
             offset = 0
             indexes = {}
-            self.verbose_print('Writing files to RPAv1 data file {0}...'.format(rpa_path))
+            self.verbose_print('Writing files to RPAv1 data file {0}...'.format(_printable(rpa_path)))
             with open(rpa_path, 'wb') as data_archive:
                 for file, content in files.items():
                     if self.padlength > 0:
@@ -415,15 +447,15 @@ class RenPyArchive:
                     indexes[file] = [(offset, len(content))]
                     offset += len(content)
 
-            self.verbose_print('Writing RPAv1 index file {0}...'.format(rpi_path))
-            with open(rpi_path, 'wb') as idx_archive:
-                idx_archive.write(codecs.encode(pickle.dumps(indexes, self.PICKLE_PROTOCOL), 'zlib'))
+            self.verbose_print('Writing archive index to RPAv1 index file {0}...'.format(_printable(rpi_path)))
+            with open(rpi_path, 'wb') as index_archive:
+                index_archive.write(codecs.encode(pickle.dumps(indexes, self.PICKLE_PROTOCOL), 'zlib'))
 
             self.load(rpi_path)
             return
 
         magic_str = self._get_write_magic()
-        magic_bytes = magic_str.encode('utf-8')
+        magic_bytes = codecs.encode(magic_str, 'utf-8')
 
         if self.version in (3, 4):
             header_len = len(magic_bytes) + 16 + 1 + 8 + 1
@@ -463,9 +495,18 @@ class RenPyArchive:
                 header = '{}{:016x} {:08x} {:08x}\n'.format(magic_str, offset, 0, self.key)
             else:
                 header = '{}{:016x}\n'.format(magic_str, offset)
-            archive.write(header.encode('utf-8'))
+            archive.write(codecs.encode(header, 'utf-8'))
 
         self.load(filename)
+
+
+def parse_version_arg(val):
+    val = str(val).strip()
+    if val == '3.2':
+        return 3.2
+    if val in ('1', '2', '3', '4'):
+        return int(val)
+    raise ValueError('unsupported archive version: {0}'.format(val))
 
 
 def main(argv=None):
@@ -481,7 +522,7 @@ def main(argv=None):
 
     parser.add_argument('-l', '--list', action='store_true', help='List files in archive ARCHIVE.')
     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')
-    parser.add_argument('--only', metavar='EXT', help='Extract or list only FILEs with specific extension (e.g., .png).')
+    parser.add_argument('--only', metavar='PATTERN', help='Filter FILEs by extensions or wildcards, comma-separated (e.g., ".png,.webp" or "images/*").')
     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
     parser.add_argument('-d', '--delete', action='store_true', help='Delete FILEs from ARCHIVE.')
     parser.add_argument('-a', '--append', action='store_true', help='Append FILEs to ARCHIVE.')
@@ -493,9 +534,8 @@ def main(argv=None):
     parser.add_argument('-4', '--four', action='store_true', help='Use the RPAv4 format for creating/saving archives.')
 
     parser.add_argument('--magic', metavar='MAGIC', help='Custom magic header string for reading/writing modded archives (e.g., "ALT-1.0 ").')
-    parser.add_argument('--force-version', metavar='VER', type=float, choices=[1.0, 2.0, 3.0, 3.2, 4.0],
-                        help='Force archive format version (1, 2, 3, 3.2, or 4) when reading.')
-    parser.add_argument('--offset', metavar='OFFSET', help='Override index offset in hexadecimal for reading modded archives.')
+    parser.add_argument('--force-version', metavar='VER', help='Force archive version (1, 2, 3, 3.2, or 4) when reading custom headers.')
+    parser.add_argument('--offset', metavar='OFFSET', help='Override the index offset in hexadecimal when reading custom headers.')
     parser.add_argument('-k', '--key', metavar='KEY', help='The obfuscation key used for RPAv3/v3.2/v4 archives, in hexadecimal (default: 0xDEADBEEF).')
     parser.add_argument('-p', '--padding', metavar='COUNT', help='The maximum number of bytes of padding to add between files (default: 0).')
     parser.add_argument('-o', '--outfile', help='An alternative output archive file when appending to or deleting from archives, or output directory when extracting.')
@@ -510,18 +550,18 @@ def main(argv=None):
         explicit_version = 1
     elif arguments.two:
         explicit_version = 2
-    elif arguments.three:
-        explicit_version = 3
     elif arguments.three_two:
         explicit_version = 3.2
     elif arguments.four:
         explicit_version = 4
+    elif arguments.three:
+        explicit_version = 3
 
-    version = explicit_version if explicit_version is not None else 3
+    default_version = explicit_version if explicit_version is not None else 3
     key = int(arguments.key, 16) if arguments.key is not None else 0xDEADBEEF
     override_key = int(arguments.key, 16) if arguments.key is not None else None
     override_offset = int(arguments.offset, 16) if arguments.offset is not None else None
-    force_version = int(arguments.force_version) if arguments.force_version in (1.0, 2.0, 3.0, 4.0) else arguments.force_version
+    force_version = parse_version_arg(arguments.force_version) if arguments.force_version is not None else None
     padding = int(arguments.padding) if arguments.padding is not None else 0
 
     if arguments.create:
@@ -542,7 +582,6 @@ def main(argv=None):
             archive_path,
             padlength=padding,
             key=key,
-            version=version,
             verbose=arguments.verbose,
             force_version=force_version,
             override_offset=override_offset,
@@ -574,7 +613,12 @@ def main(argv=None):
             add_file(_unicode(filename))
 
         if arguments.create or explicit_version is not None:
-            archive.version = version
+            archive.version = default_version
+            if explicit_version is not None and not arguments.magic:
+                archive.detected_magic = None
+        if arguments.magic:
+            archive.custom_magic = RenPyArchive._normalize_magic(arguments.magic)
+
         try:
             archive.save(output)
         except Exception as e:
@@ -588,7 +632,12 @@ def main(argv=None):
                 print('Could not delete file {0} from archive: {1}'.format(filename, e), file=sys.stderr)
 
         if explicit_version is not None:
-            archive.version = version
+            archive.version = explicit_version
+            if not arguments.magic:
+                archive.detected_magic = None
+        if arguments.magic:
+            archive.custom_magic = RenPyArchive._normalize_magic(arguments.magic)
+
         try:
             archive.save(output)
         except Exception as e:
@@ -601,7 +650,7 @@ def main(argv=None):
             files = archive.list()
 
         if arguments.only:
-            files = [f for f in files if f.lower().endswith(arguments.only.lower())]
+            files = filter_files_by_only(files, arguments.only)
 
         if output and not os.path.exists(output):
             os.makedirs(output)
@@ -614,13 +663,12 @@ def main(argv=None):
 
             try:
                 contents = archive.read(filename)
-                safe_outfile = sanitize_extract_path(output, outfile)
-                target_path = os.path.join(output, safe_outfile)
-                out_dir = os.path.dirname(target_path)
+                dest_path = sanitize_extract_path(output, outfile)
+                out_dir = os.path.dirname(dest_path)
                 if out_dir and not os.path.exists(out_dir):
                     os.makedirs(out_dir)
 
-                with open(target_path, 'wb') as file:
+                with open(dest_path, 'wb') as file:
                     file.write(contents)
             except Exception as e:
                 print('Could not extract file {0} from archive: {1}'.format(filename, e), file=sys.stderr)
@@ -629,7 +677,7 @@ def main(argv=None):
         files = archive.list()
         files.sort()
         if arguments.only:
-            files = [f for f in files if f.lower().endswith(arguments.only.lower())]
+            files = filter_files_by_only(files, arguments.only)
         for file in files:
             print(file)
     else:
