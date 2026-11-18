@@ -5,14 +5,14 @@ from __future__ import print_function
 import sys
 import os
 import codecs
-import pickle
 import errno
 import random
-try:
-    import pickle5 as pickle
-except:
-    import pickle
-    if sys.version_info < (3, 8):
+
+if sys.version_info < (3, 8):
+    try:
+        import pickle5 as pickle
+    except ImportError:
+        import pickle
         print('warning: pickle5 module could not be loaded and Python version is < 3.8,', file=sys.stderr)
         print('         newer Ren\'Py games may fail to unpack!', file=sys.stderr)
         if sys.version_info >= (3, 5):
@@ -21,6 +21,8 @@ except:
         else:
             print('         if this occurs, please upgrade to a newer Python (>= 3.5).', file=sys.stderr)
         print(file=sys.stderr)
+else:
+    import pickle
 
 
 if sys.version_info[0] >= 3:
@@ -31,10 +33,9 @@ if sys.version_info[0] >= 3:
         return text
 
     def _unmangle(data):
-        if type(data) == bytes:
+        if isinstance(data, bytes):
             return data
-        else:
-            return data.encode('latin1')
+        return data.encode('latin1')
 
     def _unpickle(data):
         # Specify latin1 encoding to prevent raw byte values from causing an ASCII decode error.
@@ -54,18 +55,8 @@ elif sys.version_info[0] == 2:
     def _unpickle(data):
         return pickle.loads(data)
 
+
 class RenPyArchive:
-    file = None
-    handle = None
-
-    files = {}
-    indexes = {}
-
-    version = None
-    padlength = 0
-    key = None
-    verbose = False
-
     RPA2_MAGIC = 'RPA-2.0 '
     RPA3_MAGIC = 'RPA-3.0 '
     RPA3_2_MAGIC = 'RPA-3.2 '
@@ -73,15 +64,18 @@ class RenPyArchive:
     # For backward compatibility, otherwise Python3-packed archives won't be read by Python2
     PICKLE_PROTOCOL = 2
 
-    def __init__(self, file = None, version = 3, padlength = 0, key = 0xDEADBEEF, verbose = False):
+    def __init__(self, file=None, version=3, padlength=0, key=0xDEADBEEF, verbose=False):
+        self.file = None
+        self.handle = None
+        self.files = {}
+        self.indexes = {}
+        self.version = version
         self.padlength = padlength
         self.key = key
         self.verbose = verbose
 
         if file is not None:
             self.load(file)
-        else:
-            self.version = version
 
     def __del__(self):
         if self.handle is not None:
@@ -98,7 +92,7 @@ class RenPyArchive:
             return 3
         elif magic.startswith(self.RPA2_MAGIC):
             return 2
-        elif self.file.endswith('.rpi'):
+        elif self.file and self.file.endswith('.rpi'):
             return 1
 
         raise ValueError('the given file is not a valid Ren\'Py archive, or an unsupported version')
@@ -133,24 +127,18 @@ class RenPyArchive:
                 indexes = {}
                 for i in obfuscated_indexes.keys():
                     if len(obfuscated_indexes[i][0]) == 2:
-                        indexes[i] = [ (offset ^ self.key, length ^ self.key) for offset, length in obfuscated_indexes[i] ]
+                        indexes[i] = [(offset ^ self.key, length ^ self.key) for offset, length in obfuscated_indexes[i]]
                     else:
-                        indexes[i] = [ (offset ^ self.key, length ^ self.key, prefix) for offset, length, prefix in obfuscated_indexes[i] ]
+                        indexes[i] = [(offset ^ self.key, length ^ self.key, prefix) for offset, length, prefix in obfuscated_indexes[i]]
         else:
-            indexes = pickle.loads(codecs.decode(self.handle.read(), 'zlib'))
+            indexes = _unpickle(codecs.decode(self.handle.read(), 'zlib'))
 
         return indexes
 
-    # Generate pseudorandom padding (for whatever reason).
+    # Generate pseudorandom padding.
     def generate_padding(self):
         length = random.randint(1, self.padlength)
-
-        padding = ''
-        while length > 0:
-            padding += chr(random.randint(1, 255))
-            length -= 1
-
-        return bytes(padding, 'utf-8')
+        return os.urandom(length)
 
     # Converts a filename to archive format.
     def convert_filename(self, filename):
@@ -162,15 +150,14 @@ class RenPyArchive:
         if self.verbose:
             print(message)
 
-
     # List files in archive and current internal storage.
     def list(self):
         return list(self.indexes.keys()) + list(self.files.keys())
 
     # Check if a file exists in the archive.
     def has_file(self, filename):
-        filename = _unicode(filename)
-        return filename in self.indexes.keys() or filename in self.files.keys()
+        filename = self.convert_filename(_unicode(filename))
+        return filename in self.indexes or filename in self.files
 
     # Read file from archive or internal storage.
     def read(self, filename):
@@ -186,7 +173,7 @@ class RenPyArchive:
             raise IOError(errno.ENOENT, 'the requested file {0} does not exist in the given Ren\'Py archive'.format(
                 _printable(filename)))
 
-        # Check our simplified internal indexes first, in case someone wants to read a file they added before without saving, for some unholy reason.
+        # Check our simplified internal indexes first, in case someone wants to read a file they added before without saving.
         if filename in self.files:
             self.verbose_print('Reading file {0} from internal storage...'.format(_printable(filename)))
             return self.files[filename]
@@ -197,18 +184,17 @@ class RenPyArchive:
                 (offset, length, prefix) = self.indexes[filename][0]
             else:
                 (offset, length) = self.indexes[filename][0]
-                prefix = ''
+                prefix = b''
 
             self.verbose_print('Reading file {0} from data file {1}... (offset = {2}, length = {3} bytes)'.format(
                 _printable(filename), self.file, offset, length))
             self.handle.seek(offset)
-            return _unmangle(prefix) + self.handle.read(length - len(prefix))
+            unmangled_prefix = _unmangle(prefix)
+            return unmangled_prefix + self.handle.read(length - len(unmangled_prefix))
 
     # Modify a file in archive or internal storage.
     def change(self, filename, contents):
         filename = _unicode(filename)
-
-        # Our 'change' is basically removing the file from our indexes first, and then re-adding it.
         self.remove(filename)
         self.add(filename, contents)
 
@@ -224,7 +210,7 @@ class RenPyArchive:
 
     # Remove a file from archive or internal storage.
     def remove(self, filename):
-        filename = _unicode(filename)
+        filename = self.convert_filename(_unicode(filename))
         if filename in self.files:
             self.verbose_print('Removing file {0} from internal storage...'.format(_printable(filename)))
             del self.files[filename]
@@ -240,6 +226,7 @@ class RenPyArchive:
 
         if self.handle is not None:
             self.handle.close()
+            self.handle = None
         self.file = filename
         self.files = {}
         self.handle = open(self.file, 'rb')
@@ -247,14 +234,14 @@ class RenPyArchive:
         self.indexes = self.extract_indexes()
 
     # Save current state into a new file, merging archive and internal storage, rebuilding indexes, and optionally saving in another format version.
-    def save(self, filename = None):
-        filename = _unicode(filename)
-
+    def save(self, filename=None):
         if filename is None:
             filename = self.file
         if filename is None:
             raise ValueError('no target file found for saving archive')
-        if self.version != 2 and self.version != 3:
+        filename = _unicode(filename)
+
+        if self.version not in (2, 3):
             raise ValueError('saving is only supported for version 2 and 3 archives')
 
         self.verbose_print('Rebuilding archive index...')
@@ -267,50 +254,50 @@ class RenPyArchive:
             del self.indexes[file]
             files[file] = content
 
+        # Close existing handle before writing so overwriting the same file works on all platforms.
+        if self.handle is not None:
+            self.handle.close()
+            self.handle = None
+
         # Predict header length, we'll write that one last.
-        offset = 0
-        if self.version == 3:
-            offset = 34
-        elif self.version == 2:
-            offset = 25
-        archive = open(filename, 'wb')
-        archive.seek(offset)
+        offset = 34 if self.version == 3 else 25
+        with open(filename, 'wb') as archive:
+            archive.seek(offset)
 
-        # Build our own indexes while writing files to the archive.
-        indexes = {}
-        self.verbose_print('Writing files to archive file...')
-        for file, content in files.items():
-            # Generate random padding, for whatever reason.
-            if self.padlength > 0:
-                padding = self.generate_padding()
-                archive.write(padding)
-                offset += len(padding)
+            # Build our own indexes while writing files to the archive.
+            indexes = {}
+            self.verbose_print('Writing files to archive file...')
+            for file, content in files.items():
+                if self.padlength > 0:
+                    padding = self.generate_padding()
+                    archive.write(padding)
+                    offset += len(padding)
 
-            archive.write(content)
-            # Update index.
+                archive.write(content)
+                # Update index.
+                if self.version == 3:
+                    indexes[file] = [(offset ^ self.key, len(content) ^ self.key)]
+                elif self.version == 2:
+                    indexes[file] = [(offset, len(content))]
+                offset += len(content)
+
+            # Write the indexes.
+            self.verbose_print('Writing archive index to archive file...')
+            archive.write(codecs.encode(pickle.dumps(indexes, self.PICKLE_PROTOCOL), 'zlib'))
+
+            # Now write the header.
+            self.verbose_print('Writing header to archive file... (version = RPAv{0})'.format(self.version))
+            archive.seek(0)
             if self.version == 3:
-                indexes[file] = [ (offset ^ self.key, len(content) ^ self.key) ]
-            elif self.version == 2:
-                indexes[file] = [ (offset, len(content)) ]
-            offset += len(content)
-
-        # Write the indexes.
-        self.verbose_print('Writing archive index to archive file...')
-        archive.write(codecs.encode(pickle.dumps(indexes, self.PICKLE_PROTOCOL), 'zlib'))
-        # Now write the header.
-        self.verbose_print('Writing header to archive file... (version = RPAv{0})'.format(self.version))
-        archive.seek(0)
-        if self.version == 3:
-            archive.write(codecs.encode('{}{:016x} {:08x}\n'.format(self.RPA3_MAGIC, offset, self.key)))
-        else:
-            archive.write(codecs.encode('{}{:016x}\n'.format(self.RPA2_MAGIC, offset)))
-        # We're done, close it.
-        archive.close()
+                archive.write(codecs.encode('{}{:016x} {:08x}\n'.format(self.RPA3_MAGIC, offset, self.key), 'utf-8'))
+            else:
+                archive.write(codecs.encode('{}{:016x}\n'.format(self.RPA2_MAGIC, offset), 'utf-8'))
 
         # Reload the file in our inner database.
         self.load(filename)
 
-def main(argv = None):
+
+def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -323,7 +310,7 @@ def main(argv = None):
 
     parser.add_argument('-l', '--list', action='store_true', help='List files in archive ARCHIVE.')
     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')
-    parser.add_argument('--only', metavar='EXT', help='Extract only FILEs with specific extension (e.g., .png)')
+    parser.add_argument('--only', metavar='EXT', help='Extract or list only FILEs with specific extension (e.g., .png).')
     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
     parser.add_argument('-d', '--delete', action='store_true', help='Delete FILEs from ARCHIVE.')
     parser.add_argument('-a', '--append', action='store_true', help='Append FILEs to ARCHIVE.')
@@ -338,64 +325,47 @@ def main(argv = None):
     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
     parser.add_argument('-V', '--version', action='version', version='rpatool v1.0.0', help='Show version information.')
-    arguments = parser.parse_args()
+    arguments = parser.parse_args(argv)
 
     # Determine RPA version.
-    if arguments.two:
-        version = 2
-    else:
-        version = 3
+    version = 2 if arguments.two else 3
 
     # Determine RPAv3 key.
-    if 'key' in arguments and arguments.key is not None:
-        key = int(arguments.key, 16)
-    else:
-        key = 0xDEADBEEF
+    key = int(arguments.key, 16) if arguments.key is not None else 0xDEADBEEF
 
     # Determine padding bytes.
-    if 'padding' in arguments and arguments.padding is not None:
-        padding = int(arguments.padding)
-    else:
-        padding = 0
+    padding = int(arguments.padding) if arguments.padding is not None else 0
 
-    # Determine output file/directory and input archive
+    # Determine output file/directory and input archive.
     if arguments.create:
-        archive = None
+        archive_path = None
         output = _unicode(arguments.archive)
     else:
-        archive = _unicode(arguments.archive)
-        if 'outfile' in arguments and arguments.outfile is not None:
+        archive_path = _unicode(arguments.archive)
+        if arguments.outfile is not None:
             output = _unicode(arguments.outfile)
         else:
-            # Default output directory for extraction is the current directory.
-            if arguments.extract:
-                output = '.'
-            else:
-                output = _unicode(arguments.archive)
+            output = '.' if arguments.extract else _unicode(arguments.archive)
 
     # Normalize files.
     if len(arguments.files) > 0 and isinstance(arguments.files[0], list):
         arguments.files = arguments.files[0]
 
     try:
-        archive = RenPyArchive(archive, padlength=padding, key=key, version=version, verbose=arguments.verbose)
+        archive = RenPyArchive(archive_path, padlength=padding, key=key, verbose=arguments.verbose)
     except IOError as e:
-        print('Could not open archive file {0} for reading: {1}'.format(archive, e), file=sys.stderr)
+        print('Could not open archive file {0} for reading: {1}'.format(archive_path, e), file=sys.stderr)
         sys.exit(1)
 
     if arguments.create or arguments.append:
-        # We need this seperate function to recursively process directories.
         def add_file(filename):
-            # If the archive path differs from the actual file path, as given in the argument,
-            # extract the archive path and actual file path.
-            if filename.find('=') != -1:
-                (outfile, filename) = filename.split('=', 2)
+            if '=' in filename:
+                (outfile, filename) = filename.split('=', 1)
             else:
                 outfile = filename
 
             if os.path.isdir(filename):
                 for file in os.listdir(filename):
-                    # We need to do this in order to maintain a possible ARCHIVE=REAL mapping between directories.
                     add_file(outfile + os.sep + file + '=' + filename + os.sep + file)
             else:
                 try:
@@ -404,68 +374,64 @@ def main(argv = None):
                 except Exception as e:
                     print('Could not add file {0} to archive: {1}'.format(filename, e), file=sys.stderr)
 
-        # Iterate over the given files to add to archive.
         for filename in arguments.files:
             add_file(_unicode(filename))
 
-        # Set version for saving, and save.
         archive.version = version
         try:
             archive.save(output)
         except Exception as e:
             print('Could not save archive file: {0}'.format(e), file=sys.stderr)
+
     elif arguments.delete:
-        # Iterate over the given files to delete from the archive.
         for filename in arguments.files:
             try:
                 archive.remove(filename)
             except Exception as e:
                 print('Could not delete file {0} from archive: {1}'.format(filename, e), file=sys.stderr)
 
-        # Set version for saving, and save.
         archive.version = version
         try:
             archive.save(output)
         except Exception as e:
             print('Could not save archive file: {0}'.format(e), file=sys.stderr)
+
     elif arguments.extract:
-        # Either extract the given files, or all files if no files are given.
         if len(arguments.files) > 0:
             files = arguments.files
         else:
             files = archive.list()
-            
-            # optional filter --only
-            if arguments.only:
-             files = [f for f in files if f.lower().endswith(arguments.only.lower())]
 
+        # Apply --only filter regardless of whether specific files were passed.
+        if arguments.only:
+            files = [f for f in files if f.lower().endswith(arguments.only.lower())]
 
-        # Create output directory if not present.
-        if not os.path.exists(output):
+        if output and not os.path.exists(output):
             os.makedirs(output)
 
-        # Iterate over files to extract.
         for filename in files:
-            if filename.find('=') != -1:
-                (outfile, filename) = filename.split('=', 2)
+            if '=' in filename:
+                (outfile, filename) = filename.split('=', 1)
             else:
                 outfile = filename
 
             try:
                 contents = archive.read(filename)
 
-                # Create output directory for file if not present.
-                if not os.path.exists(os.path.dirname(os.path.join(output, outfile))):
-                    os.makedirs(os.path.dirname(os.path.join(output, outfile)))
+                out_dir = os.path.dirname(os.path.join(output, outfile))
+                if out_dir and not os.path.exists(out_dir):
+                    os.makedirs(out_dir)
 
                 with open(os.path.join(output, outfile), 'wb') as file:
                     file.write(contents)
             except Exception as e:
                 print('Could not extract file {0} from archive: {1}'.format(filename, e), file=sys.stderr)
+
     elif arguments.list:
-        # Print the sorted file list.
         files = archive.list()
         files.sort()
+        if arguments.only:
+            files = [f for f in files if f.lower().endswith(arguments.only.lower())]
         for file in files:
             print(file)
     else:
