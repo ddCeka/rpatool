@@ -56,84 +56,6 @@ elif sys.version_info[0] == 2:
         return pickle.loads(data)
 
 
-class ProgressReporter:
-    """
-    Lightweight terminal progress bar / counter reporter with zero external dependencies.
-    Writes to stderr so stdout stays clean when piping or listing.
-    """
-    def __init__(self, total, label='Progress', enabled=True, verbose=False, stream=None):
-        self.total = max(0, int(total))
-        self.label = label
-        self.enabled = bool(enabled) and self.total > 0
-        self.verbose = bool(verbose)
-        self.stream = stream if stream is not None else sys.stderr
-        self.is_tty = hasattr(self.stream, 'isatty') and self.stream.isatty()
-        self.current = 0
-        self.bytes_processed = 0
-        self.start_time = time.time()
-        self._last_render = 0.0
-        self._last_line_len = 0
-
-    def _format_bytes(self, num_bytes):
-        size = float(num_bytes)
-        for unit in ('B', 'KB', 'MB', 'GB'):
-            if size < 1024.0 or unit == 'GB':
-                if unit == 'B':
-                    return '{0} B'.format(int(size))
-                return '{0:.1f} {1}'.format(size, unit)
-            size /= 1024.0
-        return '{0} B'.format(num_bytes)
-
-    def update(self, step=1, item_name=None, byte_count=0):
-        if not self.enabled:
-            return
-        self.current += step
-        self.bytes_processed += byte_count
-        now = time.time()
-        if self.current < self.total and (now - self._last_render) < 0.05:
-            return
-        self._last_render = now
-        self._render(item_name=item_name, finished=(self.current >= self.total))
-
-    def _render(self, item_name=None, finished=False):
-        pct = min(100.0, (float(self.current) / float(self.total)) * 100.0) if self.total else 100.0
-        byte_str = ' ({0})'.format(self._format_bytes(self.bytes_processed)) if self.bytes_processed > 0 else ''
-
-        if self.is_tty and not self.verbose:
-            bar_width = 24
-            filled = int(round((pct / 100.0) * bar_width))
-            bar = '#' * filled + '-' * (bar_width - filled)
-            suffix = ''
-            if item_name and not finished:
-                short_name = item_name if len(item_name) <= 32 else '...' + item_name[-29:]
-                suffix = ' | {0}'.format(short_name)
-            line = '{0}: [{1}] {2}/{3} ({4:5.1f}%){5}{6}'.format(
-                self.label, bar, self.current, self.total, pct, byte_str, suffix)
-            pad = max(0, self._last_line_len - len(line))
-            self.stream.write('\r' + line + (' ' * pad))
-            self._last_line_len = len(line)
-            if finished:
-                self.stream.write('\n')
-            self.stream.flush()
-        else:
-            if finished or not self.is_tty:
-                if not self.is_tty and not finished and self.total > 20:
-                    step_interval = max(1, self.total // 10)
-                    if self.current % step_interval != 0:
-                        return
-                line = '{0}: {1}/{2} ({3:5.1f}%){4}\n'.format(
-                    self.label, self.current, self.total, pct, byte_str)
-                self.stream.write(line)
-                self.stream.flush()
-
-    def finish(self):
-        if not self.enabled:
-            return
-        if self.current < self.total:
-            self.current = self.total
-        self._render(finished=True)
-
-
 def normalize_magic(magic):
     if magic is None:
         return None
@@ -248,6 +170,137 @@ def filter_files(files, only_spec=None, exclude_spec=None):
         result = [f for f in result if not _matches_any(f, exclude_matchers)]
 
     return result
+
+
+def format_bytes(num_bytes):
+    size = float(max(0, num_bytes))
+    for unit in ('B', 'K', 'M', 'G', 'T'):
+        if size < 1024.0 or unit == 'T':
+            if unit == 'B':
+                return '{0}B'.format(int(size))
+            if size >= 100.0:
+                return '{0:.0f}{1}'.format(size, unit)
+            return '{0:.1f}{1}'.format(size, unit)
+        size /= 1024.0
+    return '{0}B'.format(int(num_bytes))
+
+
+class ProgressReporter:
+    """
+    Compact (~60-column) CLI progress reporter for extract, pack, write, and delete operations.
+    Renders a single-line bar on TTY stderr and concise milestone lines when redirected or verbose.
+    """
+    MAX_COLS = 60
+
+    def __init__(self, enabled=False, verbose=False, stream=None, bar_width=14):
+        self.enabled = bool(enabled)
+        self.verbose = bool(verbose)
+        self.stream = stream if stream is not None else sys.stderr
+        self.bar_width = bar_width
+        self.is_tty = hasattr(self.stream, 'isatty') and self.stream.isatty() and not self.verbose
+        self.action = ''
+        self.total = 0
+        self.current = 0
+        self.bytes_done = 0
+        self.last_render_time = 0.0
+        self.last_logged_percent = -1
+
+    def start(self, action, total):
+        if not self.enabled:
+            return
+        self.action = action
+        self.total = max(0, int(total))
+        self.current = 0
+        self.bytes_done = 0
+        self.last_render_time = 0.0
+        self.last_logged_percent = -1
+        if self.total == 0:
+            self._write_line('{0}: 0 items'.format(self.action), final=True)
+        else:
+            self._render('', force=True)
+
+    def update(self, item_name='', step=1, byte_delta=0):
+        if not self.enabled or self.total <= 0:
+            return
+        self.current = min(self.total, self.current + step)
+        self.bytes_done += max(0, byte_delta)
+        is_done = self.current >= self.total
+        self._render(item_name, force=is_done)
+
+    def finish(self, summary=''):
+        if not self.enabled:
+            return
+        if self.total > 0 and self.current < self.total:
+            self.current = self.total
+        if self.is_tty:
+            if summary:
+                text = '{0}: done ({1})'.format(self.action, summary)
+                if len(text) > self.MAX_COLS:
+                    text = text[:self.MAX_COLS - 3] + '...'
+                self._write_line(text, final=True)
+            else:
+                self.stream.write('\n')
+                self.stream.flush()
+        elif summary:
+            text = '{0}: done ({1})'.format(self.action, summary)
+            if len(text) > self.MAX_COLS:
+                text = text[:self.MAX_COLS - 3] + '...'
+            self._write_line(text, final=True)
+
+    def _fit_label(self, label, max_len):
+        if max_len <= 0:
+            return ''
+        label = _printable(label).replace('\n', ' ').replace('\r', ' ')
+        if len(label) <= max_len:
+            return label
+        if max_len <= 3:
+            return '.' * max_len
+        half = (max_len - 3) // 2
+        tail = max_len - 3 - half
+        return label[:half] + '...' + label[-tail:]
+
+    def _render(self, item_name, force=False):
+        now = time.time()
+        pct = int((self.current * 100) / self.total) if self.total > 0 else 100
+
+        if not self.is_tty:
+            if force or pct >= self.last_logged_percent + 20 or self.current == 1:
+                self.last_logged_percent = pct
+                size_str = ' {0}'.format(format_bytes(self.bytes_done)) if self.bytes_done > 0 else ''
+                line = '{0} {1}/{2} ({3}%){4}'.format(
+                    self.action, self.current, self.total, pct, size_str
+                )
+                self._write_line(line[:self.MAX_COLS], final=True)
+            return
+
+        if not force and (now - self.last_render_time) < 0.05:
+            return
+        self.last_render_time = now
+
+        filled = int((self.bar_width * self.current) / self.total) if self.total > 0 else self.bar_width
+        bar = '#' * filled + '-' * (self.bar_width - filled)
+        size_str = ' {0}'.format(format_bytes(self.bytes_done)) if self.bytes_done > 0 else ''
+        prefix = '{0} [{1}] {2}/{3} {4:3d}%{5}'.format(
+            self.action, bar, self.current, self.total, pct, size_str
+        )
+
+        rem = self.MAX_COLS - len(prefix) - 1
+        if item_name and rem >= 6:
+            line = '{0} {1}'.format(prefix, self._fit_label(item_name, rem))
+        else:
+            line = prefix[:self.MAX_COLS]
+
+        self._write_line(line, final=force)
+
+    def _write_line(self, text, final=False):
+        if self.is_tty:
+            padded = text.ljust(self.MAX_COLS)
+            self.stream.write('\r' + padded)
+            if final:
+                self.stream.write('\n')
+        else:
+            self.stream.write(text + '\n')
+        self.stream.flush()
 
 
 class RenPyArchive:
@@ -465,6 +518,14 @@ class RenPyArchive:
         filename = self.convert_filename(_unicode(filename))
         return filename in self.indexes or filename in self.files
 
+    def get_file_size(self, filename):
+        filename = self.convert_filename(_unicode(filename))
+        if filename in self.files:
+            return len(self.files[filename])
+        if filename in self.indexes:
+            return sum(length for _, length, _ in self.indexes[filename])
+        return 0
+
     def read(self, filename):
         filename = self.convert_filename(_unicode(filename))
 
@@ -541,7 +602,7 @@ class RenPyArchive:
             return self.RPA2_MAGIC
         return ''
 
-    def save(self, filename=None, show_progress=False):
+    def save(self, filename=None, progress=None):
         if filename is None:
             filename = self.file
         if filename is None:
@@ -554,27 +615,21 @@ class RenPyArchive:
         self.verbose_print('Rebuilding archive index...')
         files = self.files
         existing_keys = list(self.indexes.keys())
-        read_progress = ProgressReporter(
-            len(existing_keys),
-            label='Reading existing entries',
-            enabled=show_progress,
-            verbose=self.verbose,
-        )
+        if progress and existing_keys:
+            progress.start('Read', len(existing_keys))
         for file in existing_keys:
             content = self.read(file)
             del self.indexes[file]
             files[file] = content
-            read_progress.update(1, item_name=file, byte_count=len(content))
-        read_progress.finish()
+            if progress:
+                progress.update(file, step=1, byte_delta=len(content))
+        if progress and existing_keys:
+            progress.finish()
 
         self._close_handle()
 
-        write_progress = ProgressReporter(
-            len(files),
-            label='Writing archive',
-            enabled=show_progress,
-            verbose=self.verbose,
-        )
+        if progress:
+            progress.start('Save', len(files))
 
         if self.version == 1:
             rpi_path, rpa_path = self._resolve_v1_paths(filename)
@@ -590,13 +645,15 @@ class RenPyArchive:
                     data_out.write(content)
                     indexes[file] = [(offset, len(content))]
                     offset += len(content)
-                    write_progress.update(1, item_name=file, byte_count=len(content))
-            write_progress.finish()
+                    if progress:
+                        progress.update(file, step=1, byte_delta=len(content))
 
             self.verbose_print('Writing RPAv1 index file {0}...'.format(rpi_path))
             with open(rpi_path, 'wb') as rpi_out:
                 rpi_out.write(codecs.encode(pickle.dumps(indexes, self.PICKLE_PROTOCOL), 'zlib'))
 
+            if progress:
+                progress.finish('{0}f, {1}'.format(len(files), format_bytes(offset)))
             self.load(rpi_path)
             return
 
@@ -628,8 +685,8 @@ class RenPyArchive:
                 else:
                     indexes[file] = [(offset, len(content))]
                 offset += len(content)
-                write_progress.update(1, item_name=file, byte_count=len(content))
-            write_progress.finish()
+                if progress:
+                    progress.update(file, step=1, byte_delta=len(content))
 
             self.verbose_print('Writing archive index to archive file...')
             archive.write(codecs.encode(pickle.dumps(indexes, self.PICKLE_PROTOCOL), 'zlib'))
@@ -643,6 +700,8 @@ class RenPyArchive:
                 header = header_template.format(magic, offset)
             archive.write(codecs.encode(header, 'utf-8'))
 
+        if progress:
+            progress.finish('{0}f, {1}'.format(len(files), format_bytes(offset)))
         self.load(filename)
 
 
@@ -661,12 +720,9 @@ def parse_version_arg(val):
     raise ValueError('unsupported archive version: {0}'.format(val))
 
 
-def _collect_input_files(specs):
-    """
-    Expand directory entries up-front into a flat list of (archive_path, real_path) pairs
-    so accurate total counts can be reported for progress tracking.
-    """
-    collected = []
+def collect_input_mappings(file_specs):
+    """Expand directories into (archive_target_path, real_fs_path) pairs."""
+    mappings = []
 
     def _walk(spec):
         outfile, real_filename = split_archive_mapping(spec)
@@ -674,11 +730,12 @@ def _collect_input_files(specs):
             for entry in sorted(os.listdir(real_filename)):
                 _walk(outfile + os.sep + entry + '=' + real_filename + os.sep + entry)
         else:
-            collected.append((outfile, real_filename))
+            mappings.append((outfile, real_filename))
 
-    for spec in specs:
+    for spec in file_specs:
         _walk(_unicode(spec))
-    return collected
+
+    return mappings
 
 
 def main(argv=None):
@@ -712,7 +769,7 @@ def main(argv=None):
     parser.add_argument('-k', '--key', metavar='KEY', help='The obfuscation key used for RPAv3/v3.2/v4 archives, in hexadecimal (default: 0xDEADBEEF).')
     parser.add_argument('-p', '--padding', metavar='COUNT', help='The maximum number of bytes of padding to add between files (default: 0).')
     parser.add_argument('-o', '--outfile', help='An alternative output archive file when appending to or deleting from archives, or output directory when extracting.')
-    parser.add_argument('--progress', action='store_true', help='Show progress output during extract, create, append, and delete operations.')
+    parser.add_argument('--progress', action='store_true', help='Show progress output while extracting, packing, or modifying archives.')
 
     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
@@ -756,6 +813,8 @@ def main(argv=None):
     if len(arguments.files) > 0 and isinstance(arguments.files[0], list):
         arguments.files = arguments.files[0]
 
+    progress = ProgressReporter(enabled=arguments.progress, verbose=arguments.verbose)
+
     try:
         archive = RenPyArchive(
             archive_path,
@@ -773,23 +832,21 @@ def main(argv=None):
         sys.exit(1)
 
     if arguments.create or arguments.append:
-        collected_files = _collect_input_files(arguments.files)
-        read_progress = ProgressReporter(
-            len(collected_files),
-            label='Packing files',
-            enabled=arguments.progress,
-            verbose=arguments.verbose,
-        )
-        for outfile, real_filename in collected_files:
+        mappings = collect_input_mappings(arguments.files)
+        progress.start('Pack', len(mappings))
+        packed_bytes = 0
+        for outfile, real_filename in mappings:
+            file_bytes = 0
             try:
                 with open(real_filename, 'rb') as file:
                     data = file.read()
-                archive.add(outfile, data)
-                read_progress.update(1, item_name=outfile, byte_count=len(data))
+                    file_bytes = len(data)
+                    archive.add(outfile, data)
             except Exception as e:
                 print('Could not add file {0} to archive: {1}'.format(real_filename, e), file=sys.stderr)
-                read_progress.update(1, item_name=outfile)
-        read_progress.finish()
+            packed_bytes += file_bytes
+            progress.update(outfile, step=1, byte_delta=file_bytes)
+        progress.finish('{0}f, {1}'.format(len(mappings), format_bytes(packed_bytes)))
 
         if explicit_version is not None or arguments.create:
             archive.version = target_version
@@ -799,25 +856,20 @@ def main(argv=None):
             archive.key = force_key
 
         try:
-            archive.save(output, show_progress=arguments.progress)
+            archive.save(output, progress=progress)
         except Exception as e:
             print('Could not save archive file: {0}'.format(e), file=sys.stderr)
             sys.exit(1)
 
     elif arguments.delete:
-        del_progress = ProgressReporter(
-            len(arguments.files),
-            label='Deleting entries',
-            enabled=arguments.progress,
-            verbose=arguments.verbose,
-        )
+        progress.start('Del', len(arguments.files))
         for filename in arguments.files:
             try:
                 archive.remove(filename)
             except Exception as e:
                 print('Could not delete file {0} from archive: {1}'.format(filename, e), file=sys.stderr)
-            del_progress.update(1, item_name=filename)
-        del_progress.finish()
+            progress.update(filename, step=1)
+        progress.finish()
 
         if explicit_version is not None:
             archive.version = explicit_version
@@ -827,7 +879,7 @@ def main(argv=None):
             archive.key = force_key
 
         try:
-            archive.save(output, show_progress=arguments.progress)
+            archive.save(output, progress=progress)
         except Exception as e:
             print('Could not save archive file: {0}'.format(e), file=sys.stderr)
             sys.exit(1)
@@ -843,12 +895,9 @@ def main(argv=None):
         if output and not os.path.exists(output):
             os.makedirs(output)
 
-        extract_progress = ProgressReporter(
-            len(files),
-            label='Extracting',
-            enabled=arguments.progress,
-            verbose=arguments.verbose,
-        )
+        progress.start('Ext', len(files))
+        extracted_count = 0
+        extracted_bytes = 0
         for filename in files:
             if '=' in filename and not archive.has_file(filename):
                 (outfile, archive_filename) = filename.split('=', 1)
@@ -856,8 +905,10 @@ def main(argv=None):
                 outfile = filename
                 archive_filename = filename
 
+            file_bytes = 0
             try:
                 contents = archive.read(archive_filename)
+                file_bytes = len(contents)
                 target_path = sanitize_extract_path(output, outfile)
                 out_dir = os.path.dirname(target_path)
                 if out_dir and not os.path.exists(out_dir):
@@ -865,11 +916,12 @@ def main(argv=None):
 
                 with open(target_path, 'wb') as file:
                     file.write(contents)
-                extract_progress.update(1, item_name=archive_filename, byte_count=len(contents))
+                extracted_count += 1
             except Exception as e:
                 print('Could not extract file {0} from archive: {1}'.format(archive_filename, e), file=sys.stderr)
-                extract_progress.update(1, item_name=archive_filename)
-        extract_progress.finish()
+            extracted_bytes += file_bytes
+            progress.update(archive_filename, step=1, byte_delta=file_bytes)
+        progress.finish('{0}/{1}f, {2}'.format(extracted_count, len(files), format_bytes(extracted_bytes)))
 
     elif arguments.list:
         files = archive.list()
