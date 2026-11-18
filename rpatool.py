@@ -9,7 +9,7 @@ import errno
 import random
 import fnmatch
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 if sys.version_info < (3, 8):
     try:
@@ -173,143 +173,108 @@ def filter_files(files, only_spec=None, exclude_spec=None):
     return result
 
 
-def format_size_human(num_bytes):
+def format_size(num_bytes):
+    size = float(num_bytes)
+    for unit in ('B', 'K', 'M', 'G', 'T'):
+        if size < 1024.0 or unit == 'T':
+            if unit == 'B':
+                return '{0}B'.format(int(size))
+            return '{0:.1f}{1}'.format(size, unit)
+        size /= 1024.0
+    return '{0}B'.format(int(num_bytes))
+
+
+def format_size_long(num_bytes):
     size = float(num_bytes)
     for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
         if size < 1024.0 or unit == 'TB':
             if unit == 'B':
                 return '{0} B'.format(int(size))
-            return '{0:.2f} {1}'.format(size, unit)
+            return '{0:.2f} {1} ({2:,} bytes)'.format(size, unit, int(num_bytes))
         size /= 1024.0
-    return '{0} B'.format(num_bytes)
+    return '{0} B'.format(int(num_bytes))
+
+
+def middle_truncate(text, max_len):
+    if max_len <= 0:
+        return ''
+    if len(text) <= max_len:
+        return text
+    if max_len <= 3:
+        return '.' * max_len
+    left = (max_len - 3) // 2
+    right = max_len - 3 - left
+    return text[:left] + '...' + text[-right:]
 
 
 class ProgressReporter:
-    """
-    Thread-safe compact 60-column progress indicator.
-    Uses single-line carriage returns on interactive TTYs and milestone lines when redirected.
-    """
     MAX_COLS = 60
 
-    def __init__(self, enabled=False, total=0, label='Working', stream=None, verbose=False):
-        self.enabled = bool(enabled)
+    def __init__(self, total, action='Working', enabled=True, verbose=False, stream=None):
         self.total = max(0, int(total))
-        self.label = label
-        self.stream = stream if stream is not None else sys.stderr
+        self.action = action
+        self.enabled = bool(enabled)
         self.verbose = bool(verbose)
+        self.stream = stream if stream is not None else sys.stderr
         self.current = 0
-        self.bytes_processed = 0
-        self._last_percent = -1
-        self._active_line = False
+        self.bytes_done = 0
+        self.is_tty = hasattr(self.stream, 'isatty') and self.stream.isatty()
+        self._last_line_len = 0
         self._lock = threading.Lock()
-        self.is_tty = False
-        if self.enabled and hasattr(self.stream, 'isatty'):
-            try:
-                self.is_tty = bool(self.stream.isatty())
-            except Exception:
-                self.is_tty = False
 
-    @staticmethod
-    def _format_bytes(num_bytes):
-        size = float(num_bytes)
-        for unit in ('B', 'K', 'M', 'G', 'T'):
-            if size < 1024.0 or unit == 'T':
-                if unit == 'B':
-                    return '{0}B'.format(int(size))
-                return '{0:.1f}{1}'.format(size, unit)
-            size /= 1024.0
-        return '{0}B'.format(num_bytes)
-
-    @staticmethod
-    def _shorten_name(name, max_len):
-        if max_len <= 0:
-            return ''
-        if len(name) <= max_len:
-            return name
-        if max_len <= 3:
-            return '.' * max_len
-        keep = max_len - 3
-        head = keep // 2
-        tail = keep - head
-        return name[:head] + '...' + name[-tail:]
-
-    def _build_line(self, item_name):
-        if self.total > 0:
-            pct = min(100, int((self.current * 100) / self.total))
-            bar_w = 12
-            filled = int((pct * bar_w) / 100)
-            bar = '#' * filled + '-' * (bar_w - filled)
-            prefix = '{0} [{1}] {2}/{3} {4:>3d}% {5}'.format(
-                self.label,
-                bar,
-                self.current,
-                self.total,
-                pct,
-                self._format_bytes(self.bytes_processed),
-            )
-        else:
-            prefix = '{0} {1} ({2})'.format(
-                self.label,
-                self.current,
-                self._format_bytes(self.bytes_processed),
-            )
-
-        if item_name:
-            rem = self.MAX_COLS - len(prefix) - 1
-            if rem >= 6:
-                short_name = self._shorten_name(item_name, rem)
-                line = '{0} {1}'.format(prefix, short_name)
-            else:
-                line = prefix
-        else:
-            line = prefix
-
-        if len(line) > self.MAX_COLS:
-            line = line[:self.MAX_COLS]
-        return line
-
-    def update(self, step=1, item_name='', byte_count=0):
+    def update(self, item_name='', nbytes=0, step=1):
         if not self.enabled:
             return
-
         with self._lock:
             self.current += step
-            self.bytes_processed += byte_count
-            line = self._build_line(item_name)
+            self.bytes_done += nbytes
+            self._render(item_name)
 
-            if self.is_tty and not self.verbose:
-                padded = line.ljust(self.MAX_COLS)
-                self.stream.write('\r' + padded)
+    def _format_line(self, item_name):
+        total = max(self.total, self.current, 1)
+        pct = min(100, int((self.current * 100) / total))
+        bar_width = 14
+        filled = int((bar_width * min(self.current, total)) / total)
+        bar = '#' * filled + '-' * (bar_width - filled)
+
+        prefix = '{0} [{1}] {2}/{3} {4:3d}% {5}'.format(
+            self.action,
+            bar,
+            self.current,
+            self.total,
+            pct,
+            format_size(self.bytes_done),
+        )
+        rem = self.MAX_COLS - len(prefix)
+        if item_name and rem >= 5:
+            short_name = middle_truncate(os.path.basename(_printable(item_name)), rem - 1)
+            line = prefix + ' ' + short_name
+        else:
+            line = prefix[:self.MAX_COLS]
+        return line[:self.MAX_COLS]
+
+    def _render(self, item_name=''):
+        line = self._format_line(item_name)
+
+        if self.is_tty and not self.verbose:
+            pad = max(0, self._last_line_len - len(line))
+            self.stream.write('\r' + line + (' ' * pad))
+            self.stream.flush()
+            self._last_line_len = len(line)
+        else:
+            step_interval = max(1, self.total // 10) if self.total > 0 else 1
+            if self.current == 1 or self.current >= self.total or (self.current % step_interval) == 0:
+                self.stream.write(line + '\n')
                 self.stream.flush()
-                self._active_line = True
-            else:
-                if self.total > 0:
-                    pct = min(100, int((self.current * 100) / self.total))
-                    if self.current == 1 or self.current == self.total or (pct // 10) > (self._last_percent // 10):
-                        self._last_percent = pct
-                        self.stream.write(line + '\n')
-                        self.stream.flush()
-                else:
-                    if self.current == 1 or self.current % 50 == 0:
-                        self.stream.write(line + '\n')
-                        self.stream.flush()
 
-    def finish(self, summary=None):
+    def finish(self):
         if not self.enabled:
             return
-
         with self._lock:
-            if self.is_tty and not self.verbose:
-                if summary:
-                    msg = summary[:self.MAX_COLS].ljust(self.MAX_COLS)
-                    self.stream.write('\r' + msg + '\n')
-                elif self._active_line:
-                    self.stream.write('\n')
+            if self.is_tty and not self.verbose and self._last_line_len > 0:
+                self.stream.write('\n')
                 self.stream.flush()
-                self._active_line = False
-            elif summary:
-                self.stream.write(summary[:self.MAX_COLS] + '\n')
-                self.stream.flush()
+                self._last_line_len = 0
 
 
 class RenPyArchive:
@@ -341,13 +306,13 @@ class RenPyArchive:
         self.version = version
         self.padlength = padlength
         self.key = key
+        self.index_offset = None
         self.verbose = verbose
         self.force_version = force_version
         self.force_offset = force_offset
         self.force_key = force_key
         self.custom_magic = normalize_magic(custom_magic)
         self.detected_magic = None
-        self.index_offset = None
 
         if file is not None:
             self.load(file)
@@ -499,7 +464,7 @@ class RenPyArchive:
             with open(rpi_path, 'rb') as rpi_handle:
                 raw_indexes = _unpickle(codecs.decode(rpi_handle.read(), 'zlib'))
 
-            self.index_offset = 0
+            self.index_offset = None
             if os.path.abspath(self.file) != os.path.abspath(rpa_path):
                 self._close_handle()
                 self.data_file = rpa_path
@@ -511,65 +476,6 @@ class RenPyArchive:
             return self._normalize_index_entries(raw_indexes, key=None)
 
         raise ValueError('unsupported archive version: {0}'.format(self.version))
-
-    def get_info(self, only_spec=None, exclude_spec=None):
-        """
-        Return a dictionary summarizing archive metadata, file count, and uncompressed/archive sizes.
-        """
-        all_files = self.list()
-        filtered_files = filter_files(all_files, only_spec=only_spec, exclude_spec=exclude_spec)
-
-        total_uncompressed = 0
-        filtered_uncompressed = 0
-        ext_counts = {}
-
-        for fname in all_files:
-            if fname in self.files:
-                fsize = len(self.files[fname])
-            else:
-                fsize = sum(entry[1] for entry in self.indexes.get(fname, ()))
-            total_uncompressed += fsize
-
-        for fname in filtered_files:
-            if fname in self.files:
-                fsize = len(self.files[fname])
-            else:
-                fsize = sum(entry[1] for entry in self.indexes.get(fname, ()))
-            filtered_uncompressed += fsize
-
-            _, ext = os.path.splitext(fname)
-            ext_key = ext.lower() if ext else '<no ext>'
-            ext_counts[ext_key] = ext_counts.get(ext_key, 0) + 1
-
-        archive_disk_size = 0
-        if self.file and os.path.exists(self.file):
-            archive_disk_size += os.path.getsize(self.file)
-        if self.data_file and self.data_file != self.file and os.path.exists(self.data_file):
-            archive_disk_size += os.path.getsize(self.data_file)
-
-        magic_display = self.detected_magic
-        if magic_display is None:
-            if self.version == 1:
-                magic_display = '(none - RPAv1 .rpi/.rpa)'
-            else:
-                magic_display = self._get_write_magic()
-
-        has_key = self.version in (3, 3.2, 4)
-        return {
-            'file': self.file,
-            'data_file': self.data_file,
-            'version': self.version,
-            'magic': magic_display,
-            'key': self.key if has_key else None,
-            'index_offset': self.index_offset,
-            'total_files': len(all_files),
-            'filtered_files': len(filtered_files),
-            'total_size': total_uncompressed,
-            'filtered_size': filtered_uncompressed,
-            'archive_disk_size': archive_disk_size,
-            'extensions': sorted(ext_counts.items(), key=lambda kv: (-kv[1], kv[0])),
-            'is_filtered': bool(only_spec or exclude_spec),
-        }
 
     def generate_padding(self):
         length = random.randint(1, self.padlength)
@@ -590,11 +496,57 @@ class RenPyArchive:
         filename = self.convert_filename(_unicode(filename))
         return filename in self.indexes or filename in self.files
 
-    def open_data_handle(self):
-        target = self.data_file or self.file
-        if not target or not os.path.exists(target):
-            raise IOError(errno.ENOENT, 'data archive file does not exist: {0}'.format(target))
-        return open(target, 'rb')
+    def get_file_size(self, filename):
+        filename = self.convert_filename(_unicode(filename))
+        if filename in self.files:
+            return len(self.files[filename])
+        if filename in self.indexes:
+            return sum(length for _, length, _ in self.indexes[filename])
+        raise IOError(errno.ENOENT, 'the requested file {0} does not exist in the given Ren\'Py archive'.format(
+            _printable(filename)))
+
+    def get_info(self, only_spec=None, exclude_spec=None):
+        all_files = sorted(self.list())
+        filtered_files = filter_files(all_files, only_spec=only_spec, exclude_spec=exclude_spec)
+
+        total_uncompressed = 0
+        for f in all_files:
+            total_uncompressed += self.get_file_size(f)
+
+        filtered_uncompressed = 0
+        ext_counts = {}
+        for f in filtered_files:
+            filtered_uncompressed += self.get_file_size(f)
+            _, ext = os.path.splitext(f.lower())
+            ext_label = ext if ext else '(no ext)'
+            ext_counts[ext_label] = ext_counts.get(ext_label, 0) + 1
+
+        archive_size = 0
+        if self.file and os.path.exists(self.file):
+            archive_size += os.path.getsize(self.file)
+        if self.data_file and self.file and os.path.abspath(self.data_file) != os.path.abspath(self.file):
+            if os.path.exists(self.data_file):
+                archive_size += os.path.getsize(self.data_file)
+
+        magic_str = self.detected_magic
+        if magic_str is None:
+            magic_str = self._get_write_magic() or 'RPAv1 (.rpi/.rpa)'
+
+        return {
+            'file': self.file,
+            'data_file': self.data_file,
+            'version': self.version,
+            'magic': magic_str.rstrip(' ') if magic_str != 'RPAv1 (.rpi/.rpa)' else magic_str,
+            'raw_magic': magic_str,
+            'key': self.key if self.version in (3, 3.2, 4) else None,
+            'index_offset': self.index_offset,
+            'archive_size': archive_size,
+            'total_files': len(all_files),
+            'total_uncompressed': total_uncompressed,
+            'filtered_files': len(filtered_files),
+            'filtered_uncompressed': filtered_uncompressed,
+            'extensions': sorted(ext_counts.items(), key=lambda kv: (-kv[1], kv[0])),
+        }
 
     def read(self, filename, handle=None):
         filename = self.convert_filename(_unicode(filename))
@@ -688,24 +640,24 @@ class RenPyArchive:
         files = self.files
         existing_keys = list(self.indexes.keys())
         read_progress = ProgressReporter(
-            enabled=(progress is not None and progress.enabled and len(existing_keys) > 0),
             total=len(existing_keys),
-            label='Read',
+            action='Read',
+            enabled=bool(progress),
             verbose=self.verbose,
         )
         for file in existing_keys:
             content = self.read(file)
             del self.indexes[file]
             files[file] = content
-            read_progress.update(1, item_name=file, byte_count=len(content))
+            read_progress.update(file, len(content))
         read_progress.finish()
 
         self._close_handle()
 
         write_progress = ProgressReporter(
-            enabled=(progress is not None and progress.enabled),
             total=len(files),
-            label='Save',
+            action='Save',
+            enabled=bool(progress),
             verbose=self.verbose,
         )
 
@@ -723,13 +675,13 @@ class RenPyArchive:
                     data_out.write(content)
                     indexes[file] = [(offset, len(content))]
                     offset += len(content)
-                    write_progress.update(1, item_name=file, byte_count=len(content))
+                    write_progress.update(file, len(content))
 
+            write_progress.finish()
             self.verbose_print('Writing RPAv1 index file {0}...'.format(rpi_path))
             with open(rpi_path, 'wb') as rpi_out:
                 rpi_out.write(codecs.encode(pickle.dumps(indexes, self.PICKLE_PROTOCOL), 'zlib'))
 
-            write_progress.finish('Saved {0} files -> {1}'.format(len(files), rpi_path))
             self.load(rpi_path)
             return
 
@@ -761,8 +713,9 @@ class RenPyArchive:
                 else:
                     indexes[file] = [(offset, len(content))]
                 offset += len(content)
-                write_progress.update(1, item_name=file, byte_count=len(content))
+                write_progress.update(file, len(content))
 
+            write_progress.finish()
             self.verbose_print('Writing archive index to archive file...')
             archive.write(codecs.encode(pickle.dumps(indexes, self.PICKLE_PROTOCOL), 'zlib'))
 
@@ -775,7 +728,6 @@ class RenPyArchive:
                 header = header_template.format(magic, offset)
             archive.write(codecs.encode(header, 'utf-8'))
 
-        write_progress.finish('Saved {0} files -> {1}'.format(len(files), filename))
         self.load(filename)
 
 
@@ -794,16 +746,65 @@ def parse_version_arg(val):
     raise ValueError('unsupported archive version: {0}'.format(val))
 
 
+def collect_input_files(specs):
+    """
+    Expand input file and directory arguments into a flat list of (archive_path, real_path) pairs.
+    """
+    collected = []
+
+    def _walk(filename):
+        (outfile, real_filename) = split_archive_mapping(filename)
+        if os.path.isdir(real_filename):
+            for entry in sorted(os.listdir(real_filename)):
+                _walk(outfile + os.sep + entry + '=' + real_filename + os.sep + entry)
+        else:
+            collected.append((outfile, real_filename))
+
+    for spec in specs:
+        _walk(_unicode(spec))
+    return collected
+
+
 def resolve_worker_count(jobs_arg):
     if jobs_arg is None:
         return 1
     jobs = int(jobs_arg)
-    if jobs == 0:
+    if jobs <= 0:
         cpu = os.cpu_count() or 4
-        return min(8, max(1, cpu))
-    if jobs < 0:
-        raise ValueError('--jobs must be >= 0')
+        return min(8, max(2, cpu))
     return jobs
+
+
+def format_archive_info(info, has_filter=False):
+    lines = [
+        'Archive      : {0}'.format(_printable(info['file'])),
+    ]
+    if info['data_file'] and info['file'] and os.path.abspath(info['data_file']) != os.path.abspath(info['file']):
+        lines.append('Data File    : {0}'.format(_printable(info['data_file'])))
+
+    lines.extend([
+        'Format       : RPAv{0}'.format(info['version']),
+        'Magic Header : {0!r}'.format(info['magic']),
+        'XOR Key      : {0}'.format('0x{0:08X}'.format(info['key']) if info['key'] is not None else 'None (unobfuscated)'),
+        'Index Offset : {0}'.format('0x{0:X} ({0:,} bytes)'.format(info['index_offset']) if info['index_offset'] is not None else 'Separate .rpi file'),
+        'Archive Size : {0}'.format(format_size_long(info['archive_size'])),
+        'Total Files  : {0:,}'.format(info['total_files']),
+        'Payload Size : {0}'.format(format_size_long(info['total_uncompressed'])),
+    ])
+
+    if has_filter:
+        lines.append('Matched Files: {0:,} ({1})'.format(
+            info['filtered_files'],
+            format_size_long(info['filtered_uncompressed']),
+        ))
+
+    if info['extensions']:
+        top_exts = ', '.join('{0} ({1})'.format(ext, cnt) for ext, cnt in info['extensions'][:8])
+        if len(info['extensions']) > 8:
+            top_exts += ', ...'
+        lines.append('File Types   : {0}'.format(top_exts))
+
+    return '\n'.join(lines)
 
 
 def main(argv=None):
@@ -817,10 +818,9 @@ def main(argv=None):
     parser.add_argument('archive', metavar='ARCHIVE', help='The Ren\'Py archive file to operate on.')
     parser.add_argument('files', metavar='FILE', nargs='*', action='append', help='Zero or more files to operate on.')
 
-    parser.add_argument('-i', '--info', action='store_true', help='Display archive metadata (version, magic header, XOR key, file count, and total size).')
+    parser.add_argument('-i', '--info', action='store_true', help='Display archive metadata (version, magic header, XOR key, file count, and size).')
     parser.add_argument('-l', '--list', action='store_true', help='List files in archive ARCHIVE.')
     parser.add_argument('-x', '--extract', action='store_true', help='Extract FILEs from ARCHIVE.')
-    parser.add_argument('-j', '--jobs', metavar='N', type=int, default=1, help='Number of parallel worker threads for extraction (default: 1, 0 = auto).')
     parser.add_argument('--only', metavar='PATTERNS', help='Include only matching extensions or wildcards, comma-separated (e.g., .png,.webp or images/*).')
     parser.add_argument('--exclude', metavar='PATTERNS', help='Exclude matching extensions or wildcards, comma-separated (e.g., .rpyc,.txt or cache/*).')
     parser.add_argument('-c', '--create', action='store_true', help='Create ARCHIVE from FILEs.')
@@ -838,9 +838,11 @@ def main(argv=None):
     parser.add_argument('--offset', metavar='HEX', help='Override index offset in hexadecimal for non-standard headers.')
     parser.add_argument('-k', '--key', metavar='KEY', help='The obfuscation key used for RPAv3/v3.2/v4 archives, in hexadecimal (default: 0xDEADBEEF).')
     parser.add_argument('-p', '--padding', metavar='COUNT', help='The maximum number of bytes of padding to add between files (default: 0).')
+    parser.add_argument('-j', '--jobs', metavar='N', type=int, default=1, help='Number of parallel worker threads for extraction (default: 1, 0 = auto).')
     parser.add_argument('-o', '--outfile', help='An alternative output archive file when appending to or deleting from archives, or output directory when extracting.')
+    parser.add_argument('--dry-run', dest='dry_run', action='store_true', help='Simulate operations and preview planned actions without modifying any files on disk.')
+    parser.add_argument('--progress', action='store_true', help='Show a compact 60-column progress indicator during archive operations.')
 
-    parser.add_argument('--progress', action='store_true', help='Display compact 60-column progress output during operations.')
     parser.add_argument('-h', '--help', action='help', help='Print this help and exit.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Be a bit more verbose while performing operations.')
     parser.add_argument('-V', '--version', action='version', version='rpatool v1.4.0', help='Show version information.')
@@ -860,7 +862,6 @@ def main(argv=None):
 
     try:
         force_version = parse_version_arg(arguments.force_version) if arguments.force_version is not None else None
-        worker_count = resolve_worker_count(arguments.jobs)
     except ValueError as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)
@@ -870,6 +871,8 @@ def main(argv=None):
     force_key = int(arguments.key, 16) if arguments.key is not None else None
     force_offset = int(arguments.offset, 16) if arguments.offset is not None else None
     padding = int(arguments.padding) if arguments.padding is not None else 0
+    workers = resolve_worker_count(arguments.jobs)
+    dry_run = bool(arguments.dry_run)
 
     if arguments.create:
         archive_path = None
@@ -901,63 +904,12 @@ def main(argv=None):
         sys.exit(1)
 
     if arguments.info:
+        has_filter = bool(arguments.only or arguments.exclude)
         info = archive.get_info(only_spec=arguments.only, exclude_spec=arguments.exclude)
-        print('Archive      : {0}'.format(info['file']))
-        if info['data_file'] and info['data_file'] != info['file']:
-            print('Data File    : {0}'.format(info['data_file']))
-        print('Format       : RPAv{0}'.format(info['version']))
-        print('Magic Header : {0!r}'.format(info['magic']))
-        if info['key'] is not None:
-            print('XOR Key      : 0x{0:08X}'.format(info['key']))
-        else:
-            print('XOR Key      : None')
-        if info['index_offset'] is not None:
-            print('Index Offset : 0x{0:016X} ({1} bytes)'.format(info['index_offset'], info['index_offset']))
-        print('Archive Size : {0} ({1} bytes)'.format(format_size_human(info['archive_disk_size']), info['archive_disk_size']))
-        print('Total Files  : {0}'.format(info['total_files']))
-        print('Total Size   : {0} ({1} bytes)'.format(format_size_human(info['total_size']), info['total_size']))
-        if info['is_filtered']:
-            print('Matched Files: {0}'.format(info['filtered_files']))
-            print('Matched Size : {0} ({1} bytes)'.format(format_size_human(info['filtered_size']), info['filtered_size']))
-        if info['extensions']:
-            ext_summary = ', '.join('{0} ({1})'.format(ext, cnt) for ext, cnt in info['extensions'][:10])
-            if len(info['extensions']) > 10:
-                ext_summary += ', ...'
-            print('File Types   : {0}'.format(ext_summary))
+        print(format_archive_info(info, has_filter=has_filter))
 
     elif arguments.create or arguments.append:
-        pending_files = []
-
-        def collect_file(filename):
-            (outfile, real_filename) = split_archive_mapping(filename)
-            if os.path.isdir(real_filename):
-                for file in os.listdir(real_filename):
-                    collect_file(outfile + os.sep + file + '=' + real_filename + os.sep + file)
-            else:
-                pending_files.append((outfile, real_filename))
-
-        for filename in arguments.files:
-            collect_file(_unicode(filename))
-
-        pack_progress = ProgressReporter(
-            enabled=arguments.progress,
-            total=len(pending_files),
-            label='Pack',
-            verbose=arguments.verbose,
-        )
-
-        for outfile, real_filename in pending_files:
-            try:
-                with open(real_filename, 'rb') as file:
-                    data = file.read()
-                archive.add(outfile, data)
-                pack_progress.update(1, item_name=outfile, byte_count=len(data))
-            except Exception as e:
-                pack_progress.update(1, item_name=outfile, byte_count=0)
-                print('Could not add file {0} to archive: {1}'.format(real_filename, e), file=sys.stderr)
-
-        pack_progress.finish()
-
+        file_pairs = collect_input_files(arguments.files)
         if explicit_version is not None or arguments.create:
             archive.version = target_version
         if arguments.magic is not None:
@@ -965,29 +917,57 @@ def main(argv=None):
         if force_key is not None:
             archive.key = force_key
 
+        if dry_run:
+            action_label = 'create' if arguments.create else 'append'
+            total_bytes = 0
+            valid_count = 0
+            for outfile, real_filename in file_pairs:
+                norm_out = archive.convert_filename(_unicode(outfile))
+                if not os.path.exists(real_filename):
+                    print('[dry-run] Would skip missing file {0}'.format(real_filename), file=sys.stderr)
+                    continue
+                if archive.has_file(norm_out):
+                    print('[dry-run] Would fail adding duplicate {0}'.format(norm_out), file=sys.stderr)
+                    continue
+                size = os.path.getsize(real_filename)
+                total_bytes += size
+                valid_count += 1
+                print('[dry-run] Would pack {0} -> {1} ({2})'.format(
+                    real_filename, norm_out, format_size(size)))
+            print('[dry-run] Summary: would {0} {1} (RPAv{2}, magic={3!r}) with {4} new file(s) ({5}).'.format(
+                action_label,
+                output,
+                archive.version,
+                archive._get_write_magic().rstrip(' ') or 'RPAv1',
+                valid_count,
+                format_size_long(total_bytes),
+            ))
+            return
+
+        pack_progress = ProgressReporter(
+            total=len(file_pairs),
+            action='Pack',
+            enabled=arguments.progress,
+            verbose=arguments.verbose,
+        )
+        for outfile, real_filename in file_pairs:
+            try:
+                with open(real_filename, 'rb') as file:
+                    data = file.read()
+                archive.add(outfile, data)
+                pack_progress.update(outfile, len(data))
+            except Exception as e:
+                pack_progress.update(outfile, 0)
+                print('Could not add file {0} to archive: {1}'.format(real_filename, e), file=sys.stderr)
+        pack_progress.finish()
+
         try:
-            archive.save(output, progress=pack_progress)
+            archive.save(output, progress=arguments.progress)
         except Exception as e:
             print('Could not save archive file: {0}'.format(e), file=sys.stderr)
             sys.exit(1)
 
     elif arguments.delete:
-        del_progress = ProgressReporter(
-            enabled=arguments.progress,
-            total=len(arguments.files),
-            label='Del',
-            verbose=arguments.verbose,
-        )
-
-        for filename in arguments.files:
-            try:
-                archive.remove(filename)
-            except Exception as e:
-                print('Could not delete file {0} from archive: {1}'.format(filename, e), file=sys.stderr)
-            del_progress.update(1, item_name=filename)
-
-        del_progress.finish()
-
         if explicit_version is not None:
             archive.version = explicit_version
         if arguments.magic is not None:
@@ -995,8 +975,43 @@ def main(argv=None):
         if force_key is not None:
             archive.key = force_key
 
+        if dry_run:
+            removed_count = 0
+            freed_bytes = 0
+            for filename in arguments.files:
+                norm_name = archive.convert_filename(_unicode(filename))
+                if archive.has_file(norm_name):
+                    size = archive.get_file_size(norm_name)
+                    removed_count += 1
+                    freed_bytes += size
+                    print('[dry-run] Would delete {0} ({1})'.format(norm_name, format_size(size)))
+                else:
+                    print('[dry-run] Would fail deleting missing file {0}'.format(norm_name), file=sys.stderr)
+            print('[dry-run] Summary: would delete {0} file(s) ({1}) and write {2} (RPAv{3}).'.format(
+                removed_count,
+                format_size_long(freed_bytes),
+                output,
+                archive.version,
+            ))
+            return
+
+        del_progress = ProgressReporter(
+            total=len(arguments.files),
+            action='Del',
+            enabled=arguments.progress,
+            verbose=arguments.verbose,
+        )
+        for filename in arguments.files:
+            try:
+                archive.remove(filename)
+            except Exception as e:
+                print('Could not delete file {0} from archive: {1}'.format(filename, e), file=sys.stderr)
+            finally:
+                del_progress.update(filename, 0)
+        del_progress.finish()
+
         try:
-            archive.save(output, progress=del_progress)
+            archive.save(output, progress=arguments.progress)
         except Exception as e:
             print('Could not save archive file: {0}'.format(e), file=sys.stderr)
             sys.exit(1)
@@ -1009,11 +1024,11 @@ def main(argv=None):
 
         files = filter_files(files, only_spec=arguments.only, exclude_spec=arguments.exclude)
 
-        if output and not os.path.exists(output):
-            os.makedirs(output)
-
         tasks = []
-        dirs_to_create = set()
+        target_dirs = set()
+        if output:
+            target_dirs.add(os.path.abspath(output))
+
         for filename in files:
             if '=' in filename and not archive.has_file(filename):
                 (outfile, archive_filename) = filename.split('=', 1)
@@ -1025,70 +1040,87 @@ def main(argv=None):
                 target_path = sanitize_extract_path(output, outfile)
                 out_dir = os.path.dirname(target_path)
                 if out_dir:
-                    dirs_to_create.add(out_dir)
+                    target_dirs.add(out_dir)
                 tasks.append((archive_filename, target_path))
             except Exception as e:
                 print('Could not extract file {0} from archive: {1}'.format(archive_filename, e), file=sys.stderr)
 
-        for out_dir in sorted(dirs_to_create):
-            if not os.path.exists(out_dir):
-                os.makedirs(out_dir)
+        if dry_run:
+            total_bytes = 0
+            valid_count = 0
+            for archive_filename, target_path in tasks:
+                if archive.has_file(archive_filename):
+                    size = archive.get_file_size(archive_filename)
+                    total_bytes += size
+                    valid_count += 1
+                    print('[dry-run] Would extract {0} -> {1} ({2})'.format(
+                        archive_filename, target_path, format_size(size)))
+                else:
+                    print('[dry-run] Would fail extracting missing file {0}'.format(archive_filename), file=sys.stderr)
+            print('[dry-run] Summary: would extract {0} file(s) ({1}) into {2}.'.format(
+                valid_count,
+                format_size_long(total_bytes),
+                os.path.abspath(output if output else '.'),
+            ))
+            return
 
-        extract_progress = ProgressReporter(
-            enabled=arguments.progress,
+        for d in sorted(target_dirs):
+            if not os.path.exists(d):
+                os.makedirs(d, exist_ok=True)
+
+        ext_progress = ProgressReporter(
             total=len(tasks),
-            label='Ext',
+            action='Ext',
+            enabled=arguments.progress,
             verbose=arguments.verbose,
         )
 
-        extracted_count = [0]
-        extracted_bytes = [0]
-        stat_lock = threading.Lock()
-
-        if worker_count <= 1 or len(tasks) <= 1:
+        if workers <= 1 or len(tasks) <= 1:
             for archive_filename, target_path in tasks:
                 try:
                     contents = archive.read(archive_filename)
                     with open(target_path, 'wb') as file:
                         file.write(contents)
-                    extracted_count[0] += 1
-                    extracted_bytes[0] += len(contents)
-                    extract_progress.update(1, item_name=archive_filename, byte_count=len(contents))
+                    ext_progress.update(archive_filename, len(contents))
                 except Exception as e:
-                    extract_progress.update(1, item_name=archive_filename, byte_count=0)
+                    ext_progress.update(archive_filename, 0)
                     print('Could not extract file {0} from archive: {1}'.format(archive_filename, e), file=sys.stderr)
         else:
             thread_local = threading.local()
             opened_handles = []
             handles_lock = threading.Lock()
+            data_path = archive.data_file or archive.file
 
-            def get_thread_handle():
-                h = getattr(thread_local, 'handle', None)
-                if h is None:
-                    h = archive.open_data_handle()
-                    thread_local.handle = h
-                    with handles_lock:
-                        opened_handles.append(h)
-                return h
+            def _get_thread_handle():
+                if not hasattr(thread_local, 'handle'):
+                    if data_path and os.path.exists(data_path):
+                        h = open(data_path, 'rb')
+                        thread_local.handle = h
+                        with handles_lock:
+                            opened_handles.append(h)
+                    else:
+                        thread_local.handle = None
+                return thread_local.handle
 
-            def extract_worker(task):
+            def _extract_worker(task):
                 archive_filename, target_path = task
-                try:
-                    h = get_thread_handle()
-                    contents = archive.read(archive_filename, handle=h)
-                    with open(target_path, 'wb') as file:
-                        file.write(contents)
-                    with stat_lock:
-                        extracted_count[0] += 1
-                        extracted_bytes[0] += len(contents)
-                    extract_progress.update(1, item_name=archive_filename, byte_count=len(contents))
-                except Exception as e:
-                    extract_progress.update(1, item_name=archive_filename, byte_count=0)
-                    print('Could not extract file {0} from archive: {1}'.format(archive_filename, e), file=sys.stderr)
+                h = _get_thread_handle()
+                contents = archive.read(archive_filename, handle=h)
+                with open(target_path, 'wb') as out_f:
+                    out_f.write(contents)
+                return archive_filename, len(contents)
 
             try:
-                with ThreadPoolExecutor(max_workers=worker_count) as executor:
-                    list(executor.map(extract_worker, tasks))
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    future_map = {executor.submit(_extract_worker, t): t for t in tasks}
+                    for future in as_completed(future_map):
+                        archive_filename, _ = future_map[future]
+                        try:
+                            _, written = future.result()
+                            ext_progress.update(archive_filename, written)
+                        except Exception as e:
+                            ext_progress.update(archive_filename, 0)
+                            print('Could not extract file {0} from archive: {1}'.format(archive_filename, e), file=sys.stderr)
             finally:
                 for h in opened_handles:
                     try:
@@ -1096,11 +1128,7 @@ def main(argv=None):
                     except Exception:
                         pass
 
-        extract_progress.finish('Done: {0}/{1} files ({2})'.format(
-            extracted_count[0],
-            len(tasks),
-            ProgressReporter._format_bytes(extracted_bytes[0]),
-        ))
+        ext_progress.finish()
 
     elif arguments.list:
         files = archive.list()
