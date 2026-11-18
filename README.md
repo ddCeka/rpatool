@@ -2,23 +2,13 @@ rpatool
 =======
 
 This is a simple tool allowing you to inspect, create, modify, and extract Ren'Py Archive (`.rpa`/`.rpi`) files.
-Supports reading and writing **RPAv1** (`.rpi` + `.rpa`), **RPAv2**, **RPAv3**, **RPAv3.2**, and **RPAv4** archives, as well as built-in detection and custom overrides for modded magic headers.
-
-Features
---------
-* **Full Archive Version Support:** Read and write RPAv1 (`-1`), RPAv2 (`-2`), RPAv3 (`-3`), RPAv3.2 (`-32`), and RPAv4 (`-4`) archives.
-* **Modded Archive Support:** Built-in detection for common modded headers (`ALT-1.0 `, `ZiX-12A `, `ZiX-12B `, `EX2-1.0 `, `RPA-2.1 `, `RPA-3.1 `, `RPA-4.1 `, `RPA-5.0 `) plus `--magic`, `--force-version`, `--offset`, and `-k` overrides.
-* **Archive Inspection (`-i` / `--info`):** View format version, magic header, XOR key, index offset, file counts, total uncompressed payload size, and top file extensions.
-* **Flexible Filtering (`--only` / `--exclude`):** Filter listed, inspected, or extracted files using comma-separated extensions (`.png,.webp`) or glob wildcards (`images/*`).
-* **Parallel Extraction (`-j` / `--jobs`):** Unpack large archives faster using multi-threaded workers alongside safe path-traversal sanitization.
-* **Compact Progress Bar (`--progress`):** Optional 60-column live progress output during packing, extraction, and deletion.
+Supports full reading and writing across **RPAv1**, **RPAv2**, **RPAv3**, **RPAv3.2**, and **RPAv4**, built-in recognition for common modded headers (`ALT-1.0 `, `ZiX-12A `, `EX2-1.0 `, etc.), wildcard/exclude pattern filtering, dry-run simulation, compact 60-column progress reporting, and multi-threaded extraction.
 
 Usage
 -----
-    rpatool [-l|-i|-x|-c|-d|-a] [-o OUTFILE] [-1|-2|-3|-32|-4]
-            [--only PATTERNS] [--exclude PATTERNS] [--magic HEADER]
-            [--force-version VER] [--offset HEX] [-k KEY] [-p COUNT]
-            [-j N] [--progress] [-h] [-v] [-V]
+    rpatool [-l|-i|-x|-c|-d|-a] [-o OUTFILE] [--only PATTERNS] [--exclude PATTERNS]
+            [-1|-2|-3|-32|-4] [--magic HEADER] [--force-version VER] [--offset HEX]
+            [-k KEY] [-p COUNT] [-j JOBS] [--progress] [--dry-run] [-h] [-v] [-V]
             ARCHIVE [FILE [FILE ...]]
 
     positional arguments:
@@ -27,7 +17,7 @@ Usage
 
     actions:
       -l, --list            List files in archive ARCHIVE
-      -i, --info            Display archive metadata, format version, key, and size summary
+      -i, --info            Display archive metadata (version, magic header, XOR key, file count, size)
       -x, --extract         Extract FILEs from ARCHIVE
       -c, --create          Create ARCHIVE from FILEs
       -d, --delete          Delete FILEs from ARCHIVE
@@ -47,16 +37,15 @@ Usage
       -32, --three-two      Use the RPAv3.2 format for creating/saving archives
       -4, --four            Use the RPAv4 format for creating/saving archives
       --magic HEADER        Custom magic header prefix for modded archives (e.g., "ALT-1.0 ")
-      --force-version VER   Override detected archive version (1, 2, 3, 3.2, or 4)
+      --force-version VER   Override detected archive version (1, 2, 3, 3.2, or 4) for custom headers
       --offset HEX          Override index offset in hexadecimal for non-standard headers
-      -k KEY, --key KEY     The obfuscation key used for RPAv3/v3.2/v4 archives, in hex
+      -k KEY, --key KEY     The obfuscation key used for RPAv3/v3.2/v4 archives, in hexadecimal
                             (default: 0xDEADBEEF)
       -p COUNT, --padding COUNT
-                            The maximum number of bytes of padding to add between
-                            files (default: 0)
-      -j N, --jobs N        Number of parallel worker threads for extraction
-                            (default: 1, use 0 for auto)
-      --progress            Display compact 60-column progress output
+                            The maximum number of bytes of padding to add between files (default: 0)
+      -j JOBS, --jobs JOBS  Number of parallel worker threads for extraction (default: 1, 0 = auto)
+      --progress            Display a compact 60-column progress bar during operations
+      --dry-run             Simulate extract, create, append, or delete without modifying disk
       -h, --help            Print this help and exit
       -v, --verbose         Be a bit more verbose while performing operations
       -V, --version         Show version information
@@ -68,40 +57,44 @@ Usage
 Examples
 --------
     rpatool -i foo.rpa
-Will display metadata about `foo.rpa`, including its format version, magic header, XOR key, file count, and uncompressed size.
+Inspects `foo.rpa` and prints its format version, magic header, XOR key, index offset, file count, total size, and top file types.
 
     rpatool -x foo.rpa
-Will extract every file from `foo.rpa` into the current directory, making subdirectories when necessary and sanitizing paths against directory traversal.
+Extracts every file from `foo.rpa` into the current directory (`.`), sanitizing internal paths and creating subdirectories as needed.
 
     rpatool -j 4 --progress -o output -x foo.rpa
-Will extract all files from `foo.rpa` into `output` using 4 parallel worker threads and a compact 60-column progress bar.
+Extracts all files from `foo.rpa` into `output` using 4 parallel worker threads with a compact 60-column progress bar.
 
-    rpatool -o output -x foo.rpa --only ".png,.webp" --exclude "cache/*"
-Will extract only `.png` and `.webp` files from `foo.rpa` into `output` while skipping anything under `cache/`.
+    rpatool --dry-run -o output -x foo.rpa --only .png,.webp --exclude "cache/*"
+Simulates extracting `.png` and `.webp` files while skipping `cache/*`, printing all planned actions and sizes without writing anything to disk.
+
+    rpatool -o output -x foo.rpa script.rpyc ui.png
+Extracts the files `script.rpyc` and `ui.png` from `foo.rpa` into the directory `output`.
 
     rpatool -c bar.rpa test.jpg script.rpy sprites
-Will create the RPAv3 archive `bar.rpa`, containing the files `test.jpg`, `script.rpy`, and the directory `sprites`.
+Creates the RPAv3 archive `bar.rpa`, containing `test.jpg`, `script.rpy`, and the directory `sprites`.
 
     rpatool -4 -p 25 -k 12345 -c bar.rpa movies=C:\projects\vn\movies
-Will create an RPAv4 archive `bar.rpa` with the obfuscation key `0x12345` and maximum padding of `25` bytes, placing files from `C:\projects\vn\movies` into the archive folder `movies`.
+Creates an RPAv4 archive `bar.rpa` with the obfuscation key `0x12345` and maximum padding of `25`, mapping `C:\projects\vn\movies` into `movies` inside the archive.
 
-    rpatool --magic "MYGAME-1.0 " -c custom.rpa game_files
-Will create an archive using a custom magic header prefix `MYGAME-1.0 `.
+    rpatool -1 -c legacy.rpi script.rpy images
+Creates an RPAv1 archive pair (`legacy.rpi` index + `legacy.rpa` data file).
 
-    rpatool -l baz.rpa
-Will list all files in the archive `baz.rpa`.
+    rpatool --magic "MYMOD-1.0 " -o out_dir -x modded.rpa
+Unpacks a modded archive that uses a non-standard header prefix (`MYMOD-1.0 `). Built-in headers such as `ALT-1.0 `, `ZiX-12A `, `ZiX-12B `, `EX2-1.0 `, and `RPA-5.0 ` are detected automatically without `--magic`.
+
+    rpatool -l baz.rpa --only "images/*" --exclude "*.bak"
+Lists matching files in `baz.rpa`.
 
     rpatool -v -a foo.rpa sprites=sprites_new
-Will add all files from the directory `sprites_new` to the directory `sprites` in the archive, printing detailed progress messages.
+Adds all files from `sprites_new` into `sprites` in `foo.rpa`, preserving the existing archive format version and magic header.
 
     rpatool -o bar_new.rpa -d bar.rpa foo.jpg
-Will remove the file `foo.jpg` from the archive `bar.rpa`, storing the result archive in `bar_new.rpa`.
+Removes `foo.jpg` from `bar.rpa`, storing the resulting archive in `bar_new.rpa`.
 
-Testing
--------
-Run the built-in unit test suite with:
-
-    python3 -m unittest test_rpatool.py
+Running Tests
+-------------
+    python -m unittest -v test_rpatool.py
 
 API
 ---
@@ -112,50 +105,50 @@ A small overview:
                  [force_version = None], [force_offset = None], [force_key = None], [custom_magic = None])
 The constructor, which will optionally load an archive file.
 
-`file`: the archive file to open. If None, no archive will be attempted to open.
+`file`: the archive file to open. If `None`, no archive will be attempted to open.
 
-`version`: the archive format version used to save the archive when `RenPyArchive.save([file])` is called (`1`, `2`, `3`, `3.2`, or `4`). Default: `3`
+`version`: the archive format version (`1`, `2`, `3`, `3.2`, or `4`) used when `RenPyArchive.save([file])` is called. Default: `3`
 
 `padlength`: the maximum number of bytes of padding to put between files when saving. Default: `0`
 
-`key`: the obfuscation key used when saving RPAv3/v3.2/v4 archives. Default: `0xDEADBEEF`
+`key`: the obfuscation key used when saving RPAv3, RPAv3.2, or RPAv4 archives. Default: `0xDEADBEEF`
 
 `verbose`: print info on what we are doing to the command line. Default: `False`
 
-`force_version`: override auto-detected archive version (`1`, `2`, `3`, `3.2`, or `4`). Default: `None`
+`force_version`: override detected version (`1`, `2`, `3`, `3.2`, or `4`) when loading custom headers. Default: `None`
 
-`force_offset`: override index offset in bytes when reading non-standard headers. Default: `None`
+`force_offset`: override index offset in bytes when loading non-standard headers. Default: `None`
 
-`force_key`: override XOR obfuscation key when reading custom headers. Default: `None`
+`force_key`: override XOR obfuscation key when loading custom headers. Default: `None`
 
-`custom_magic`: custom magic header prefix for reading or writing modded archives. Default: `None`
+`custom_magic`: custom magic header prefix (e.g., `"ALT-1.0 "`) for reading or writing modded archives. Default: `None`
 
     RenPyArchive.load(filename)
 Loads an archive file from `filename`. Will raise an `IOError` if the file can't be accessed, or a `ValueError` if the file is not detected as a Ren'Py archive.
 
     RenPyArchive.save([filename])
-Save the archive to `filename`. Will raise `ValueError` if the filename isn't given with `filename`, nor previously defined, or an `IOError` if it couldn't save the file.
+Saves the archive to `filename` (or overwrites the loaded archive if `filename` is omitted). Supports RPAv1 (`.rpi` + `.rpa`), RPAv2, RPAv3, RPAv3.2, and RPAv4.
 
     RenPyArchive.get_info([files = None])
-Return a dictionary containing archive metadata (`version`, `magic`, `key`, `offset`, `archive_size`, `total_files`, `total_uncompressed`, `selected_files`, `selected_uncompressed`, and `extensions`).
+Returns a dictionary containing archive metadata (`version`, `magic`, `key`, `offset`, `archive_size`, `total_files`, `total_uncompressed_size`, `matched_files`, `matched_uncompressed_size`, and `extensions`).
 
     RenPyArchive.list()
-Give a list of all filenames currently in the archive.
+Gives a list of all filenames currently in the archive.
 
     RenPyArchive.has_file(filename)
-Returns True if `filename` is found in the archive, False otherwise.
+Returns `True` if `filename` is found in the archive, `False` otherwise.
 
     RenPyArchive.add(filename, content)
-Add a file to the archive with file `filename` and contents `content`. Will raise a `ValueError` if the filename already exists in the archive.
+Adds a file to the archive with path `filename` and bytes `content`. Will raise a `ValueError` if the filename already exists in the archive.
 
     RenPyArchive.change(filename, content)
-Change the contents of a current file in the archive. Will raise an `IOError` if the file isn't known in the archive.
+Changes the contents of an existing file in the archive. Will raise an `IOError` if the file isn't known in the archive.
 
     RenPyArchive.remove(filename)
-Remove `filename` from the archive. Will raise an `IOError` if the filename isn't known in the archive.
+Removes `filename` from the archive. Will raise an `IOError` if the filename isn't known in the archive.
 
     RenPyArchive.read(filename, [handle = None])
-Read and return the content of file `filename` in the archive. Optional `handle` allows thread-safe concurrent reads. Will raise an `IOError` if the filename isn't known in the archive.
+Reads and returns the bytes content of `filename` in the archive. Accepts an optional independent file `handle` for thread-safe parallel reads.
 
 License
 -------
